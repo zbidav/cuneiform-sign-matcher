@@ -94,6 +94,17 @@
       </select>
       <span class="note" id="periodMsg"></span>
     </div>
+    <div class="period">
+      <label for="topn">Show:</label>
+      <select id="topn">
+        <option value="24" selected>24</option>
+        <option value="48">48</option>
+        <option value="100">100</option>
+        <option value="250">250</option>
+        <option value="99999">All</option>
+      </select>
+      <span class="note">results per search</span>
+    </div>
     <p class="hint">Ranked by shape similarity. Click a candidate to open its eBL sign page.</p>
     <div id="results" class="results"></div>
   </section>
@@ -309,11 +320,12 @@
     if(!REF.length){statusEl.textContent="Still loading…";return;}
     if(!strokes.length){resultsEl.innerHTML="";statusEl.textContent="Draw a sign to search.";return;}
     var isAll=periodSel&&periodSel.value==="All periods";
+    var N=parseInt(topnSel.value,10)||24;
     var A=pointCloud(strokePolys(strokes));
     var scored=REF.map(function(r){return {r:r,d:chamfer(A,r.cloud)};});
     scored.sort(function(a,b){return a.d-b.d;});
     var seen={},top=[];                       // one card per sign (best-matching form)
-    for(var si=0;si<scored.length&&top.length<24;si++){var cpk=scored[si].r.cp;if(seen[cpk])continue;seen[cpk]=1;top.push(scored[si]);}
+    for(var si=0;si<scored.length&&top.length<N;si++){var cpk=scored[si].r.cp;if(seen[cpk])continue;seen[cpk]=1;top.push(scored[si]);}
     resultsEl.innerHTML="";
     for(var i=0;i<top.length;i++){
       var r=top[i].r, sim=Math.max(0,1-top[i].d);
@@ -358,6 +370,8 @@
   // Period selector really switches the reference set (each period = its own font's forms).
   var periodSel=document.getElementById("period"), periodMsg=document.getElementById("periodMsg");
   periodSel.onchange=function(){selectPeriod(periodSel.value);};
+  var topnSel=document.getElementById("topn");
+  topnSel.onchange=function(){search();};
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
