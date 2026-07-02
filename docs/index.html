@@ -541,7 +541,9 @@
     var writes="";
     if(r.lg&&r.lg.length){
       writes='<div class="detail-writes"><span class="dl">Writes (words):</span> '+
-        r.lg.map(function(w){var gw=WORDS[w];return '<a href="'+dictLink(w)+'" target="_blank" rel="noopener">'+esc(cleanLemma(w))+'</a>'+(gw?' <span class="gw">('+esc(gw)+')</span>':'');}).join(", ")+'</div>';
+        r.lg.map(function(w){var gw=WORDS[w];   // only link words with a resolved dictionary entry (no dead links)
+          return gw?('<a href="'+dictLink(w)+'" target="_blank" rel="noopener">'+esc(cleanLemma(w))+'</a> <span class="gw">('+esc(gw)+')</span>')
+                   :('<b>'+esc(cleanLemma(w))+'</b>');}).join(", ")+'</div>';
     }
     var combos="";
     if(r.cb&&r.cb.length){
