@@ -42,7 +42,8 @@
   .card:hover{transform:translateY(-2px);border-color:var(--accent)}
   .card svg{width:100%;height:52px;display:block}
   .card .nm{display:block;max-width:100%;font-size:.74rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .card .cp{font-size:.68rem;color:#8b8272}
+  .card .rd{display:block;max-width:100%;font-size:.66rem;color:#6d655a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .cp{display:block;font-size:.66rem;color:#8b8272}
   .card .sc{font-size:.68rem;color:var(--accentd);font-weight:600}
   footer{display:flex;flex-wrap:wrap;gap:16px;padding:10px 22px 26px;color:#8b8272;font-size:.8rem}
   footer a{color:var(--accentd)}
@@ -91,7 +92,7 @@
         <option value="Old Assyrian">Old Assyrian</option>
         <option value="Any">Any period</option>
       </select>
-      <span class="note">note: shapes shown are one font style; period-specific matching is coming.</span>
+      <span class="note" id="periodMsg"></span>
     </div>
     <p class="hint">Ranked by shape similarity. Click a candidate to open its eBL sign page.</p>
     <div id="results" class="results"></div>
@@ -143,7 +144,7 @@
     for(var i=0;i<window.SIGNS.length;i++){
       var s=window.SIGNS[i], flipped=[];
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
-      REF.push({c:s.c,cp:s.cp,name:s.n||"",polys:flipped,cloud:pointCloud(flipped)});
+      REF.push({c:s.c,cp:s.cp,name:s.n||"",mzl:s.m||"",abz:s.z||"",readings:s.r||null,polys:flipped,cloud:pointCloud(flipped)});
     }
   }
   function signSVG(polys){
@@ -159,6 +160,7 @@
   }
   // Unicode sign name -> eBL sign-list name (e.g. "KA TIMES BAD" -> "KA×BAD").
   function eblName(n){return n.replace(/ TIMES /g,"×").replace(/ PLUS /g,"+");}
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
 
   // ---- drawing surface ------------------------------------------------------
   // strokes: array of {pts:[[x,y],...], kind:null|'vertical'|'horizontal'|'diagonal'|'winkelhaken'}
@@ -174,24 +176,17 @@
     return [pts[0],pts[pts.length-1]];
   }
 
-  // A stamped basal wedge, centered at (cx,cy), as a short stroke with a wedge head.
+  // A stamped basal wedge as a real filled wedge shape (a closed triangle), so the four
+  // wedges are genuinely different shapes and compose into signs. pts closes the polygon.
   function makeWedge(kind,cx,cy){
-    var L=130,a=L*0.32,pts;
-    if(kind==="vertical")   pts=[[cx,cy-L/2],[cx,cy+L/2]];
-    else if(kind==="horizontal") pts=[[cx-L/2,cy],[cx+L/2,cy]];
-    else if(kind==="diagonal")   pts=[[cx-L/2,cy-L/2],[cx+L/2,cy+L/2]];
-    else /*winkelhaken*/         pts=[[cx+a,cy-a],[cx-a*0.4,cy+a*0.6]];
-    return {pts:pts,kind:kind};
-  }
-
-  function drawHead(tip,prev){
-    var dx=tip[0]-prev[0],dy=tip[1]-prev[1],L=Math.hypot(dx,dy)||1;dx/=L;dy/=L;
-    var px=-dy,py=dx,s=20,bw=9;
-    ctx.beginPath();
-    ctx.moveTo(tip[0],tip[1]);
-    ctx.lineTo(tip[0]-dx*s+px*bw,tip[1]-dy*s+py*bw);
-    ctx.lineTo(tip[0]-dx*s-px*bw,tip[1]-dy*s-py*bw);
-    ctx.closePath();ctx.fill();
+    var W;
+    if(kind==="vertical")        W=[[-22,-60],[22,-60],[0,60]];    // tall, tip down
+    else if(kind==="horizontal") W=[[60,-22],[60,22],[-60,0]];     // wide, tip left
+    else if(kind==="diagonal")   W=[[-58,-30],[-30,-58],[54,54]];  // thin, tip lower-right
+    else /*winkelhaken*/         W=[[-38,-24],[38,-24],[0,40]];    // squat corner, tip down
+    var pts=[];for(var i=0;i<W.length;i++)pts.push([W[i][0]+cx,W[i][1]+cy]);
+    pts.push(pts[0]);   // close
+    return {pts:pts,kind:kind,fill:true};
   }
 
   function redraw(){
@@ -200,13 +195,19 @@
     for(var i=0;i<all.length;i++){
       var st=all[i], pl=st.pts||st;
       if(pl.length<1)continue;
-      ctx.strokeStyle="#1a1410";ctx.fillStyle="#1a1410";ctx.lineWidth=6;ctx.lineCap="round";ctx.lineJoin="round";
+      if(st.fill){                                     // filled wedge shape
+        ctx.fillStyle="#1a1410";
+        ctx.beginPath();ctx.moveTo(pl[0][0],pl[0][1]);
+        for(var j=1;j<pl.length;j++)ctx.lineTo(pl[j][0],pl[j][1]);
+        ctx.closePath();ctx.fill();
+        continue;
+      }
+      ctx.strokeStyle="#1a1410";ctx.lineWidth=6;ctx.lineCap="round";ctx.lineJoin="round";
       ctx.beginPath();ctx.moveTo(pl[0][0],pl[0][1]);
-      for(var j=1;j<pl.length;j++)ctx.lineTo(pl[j][0],pl[j][1]);
+      for(var k=1;k<pl.length;k++)ctx.lineTo(pl[k][0],pl[k][1]);
       if(pl.length===1)ctx.lineTo(pl[0][0]+0.1,pl[0][1]+0.1);
       ctx.stroke();
-      if(st.kind && pl.length>=2)drawHead(pl[pl.length-1],pl[pl.length-2]);   // wedge head
-      ctx.fillStyle="#8a6d3b";for(var k=0;k<pl.length;k++){ctx.beginPath();ctx.arc(pl[k][0],pl[k][1],3,0,7);ctx.fill();}
+      ctx.fillStyle="#8a6d3b";for(var d=0;d<pl.length;d++){ctx.beginPath();ctx.arc(pl[d][0],pl[d][1],3,0,7);ctx.fill();}
     }
   }
 
@@ -239,13 +240,16 @@
     for(var i=0;i<top.length;i++){
       var r=top[i].r, sim=Math.max(0,1-top[i].d);
       var nm=r.name||("U+"+r.cp);
-      var a=document.createElement("a");a.className="card";a.title=nm;
+      var rd=r.readings?r.readings.slice(0,4).join(", "):"";
+      var ref=r.mzl?("MZL "+r.mzl):("U+"+r.cp);
+      var a=document.createElement("a");a.className="card";
+      a.title=nm+(rd?(" — "+r.readings.join(", ")):"")+(r.mzl?("  ·  MZL "+r.mzl):"")+(r.abz?("  ABZ "+r.abz):"");
       a.href="https://www.ebl.lmu.de/tools/signs/"+encodeURIComponent(eblName(r.name||r.c));
       a.target="_blank";a.rel="noopener";
       a.innerHTML=signSVG(r.polys)+
-        '<span class="nm">'+nm.replace(/</g,"&lt;")+'</span>'+
-        '<span class="cp">U+'+r.cp+'</span>'+
-        '<span class="sc">'+sim.toFixed(2)+'</span>';
+        '<span class="nm">'+esc(nm)+'</span>'+
+        (rd?'<span class="rd">'+esc(rd)+'</span>':'')+
+        '<span class="cp">'+esc(ref)+' · '+sim.toFixed(2)+'</span>';
       resultsEl.appendChild(a);
     }
     statusEl.textContent="Top "+top.length+" of "+REF.length+" signs.";
@@ -267,6 +271,21 @@
   document.getElementById("undo").onclick=function(){strokes.pop();redraw();search();};
   document.getElementById("clear").onclick=function(){strokes=[];redraw();resultsEl.innerHTML="";statusEl.textContent="Draw a sign to search.";};
   document.getElementById("search").onclick=search;
+
+  // Period selector is honest, not a placebo: we only have one set of sign forms (from the
+  // font), so it cannot re-rank yet. Selecting a period we lack forms for says so plainly.
+  var periodSel=document.getElementById("period"), periodMsg=document.getElementById("periodMsg");
+  function updatePeriod(){
+    var p=periodSel.value;
+    if(p==="Neo-Assyrian"||p==="Any"){
+      periodMsg.style.color="#8b8272";
+      periodMsg.textContent="Showing standard (Neo-Assyrian-style) sign forms.";
+    }else{
+      periodMsg.style.color="#8a2c22";
+      periodMsg.textContent="⚠ No "+p+"-specific forms loaded yet — results still use the standard shapes. True period matching needs a per-period sign-form dataset.";
+    }
+  }
+  periodSel.onchange=updatePeriod; updatePeriod();
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
