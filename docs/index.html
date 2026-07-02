@@ -244,7 +244,7 @@
   var PABBR={"Neo-Assyrian":"NA","Old Babylonian":"OB","Middle Babylonian":"MB","Neo-Babylonian":"NB","Hittite":"Hit","Modern (Noto)":"Noto"};
   function loadAll(keys,cb){var i=0;(function nx(){if(i>=keys.length){cb();return;}ensureLoaded(PERIODS[keys[i]],function(){i++;nx();});})();}
   function buildMeta(){
-    for(var i=0;i<window.SIGNS.length;i++){var s=window.SIGNS[i];META[s.cp]={m:s.m||"",z:s.z||"",r:s.r||null,e:s.e||"",lg:s.lg||null};}
+    for(var i=0;i<window.SIGNS.length;i++){var s=window.SIGNS[i];META[s.cp]={m:s.m||"",z:s.z||"",r:s.r||null,e:s.e||"",lg:s.lg||null,cb:s.cb||null};}
   }
   function buildRefsFrom(arr,period){
     var out=[];
@@ -252,7 +252,7 @@
       var s=arr[i], flipped=[];
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
       var mt=META[s.cp]||{};
-      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,ebl:mt.e||"",lg:mt.lg||null,period:period||"",compound:isCompound(s.n||"",mt.e||""),polys:flipped,cloud:pointCloud(flipped)});
+      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,ebl:mt.e||"",lg:mt.lg||null,cb:mt.cb||null,period:period||"",compound:isCompound(s.n||"",mt.e||""),polys:flipped,cloud:pointCloud(flipped)});
     }
     return out;
   }
@@ -470,7 +470,7 @@
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
       var mt=META[s.cp]||{}, lg=mt.lg||[], mean="", mset=[];
       for(var q=0;q<lg.length;q++){var cl=cleanLemma(lg[q]).toLowerCase(), gw=(WORDS[lg[q]]||"").toLowerCase();mean+=" "+cl+" "+gw;if(cl)mset.push(cl);if(gw)mset.push(gw);}
-      var entry={cp:s.cp,name:s.n||"",readings:mt.r||null,mzl:mt.m||"",abz:mt.z||"",ebl:mt.e||"",lg:mt.lg||null,meanstr:mean,meanset:mset,compound:isCompound(s.n||"",mt.e||""),polys:flipped};
+      var entry={cp:s.cp,name:s.n||"",readings:mt.r||null,mzl:mt.m||"",abz:mt.z||"",ebl:mt.e||"",lg:mt.lg||null,cb:mt.cb||null,meanstr:mean,meanset:mset,compound:isCompound(s.n||"",mt.e||""),polys:flipped};
       SIGNLIST.push(entry);SIGNMAP[s.cp]=entry;
     }
   }
@@ -523,8 +523,13 @@
     var meta="U+"+r.cp+(r.mzl?" · MZL "+r.mzl:"")+(r.abz?" · ABZ "+r.abz:"");
     var writes="";
     if(r.lg&&r.lg.length){
-      writes='<div class="detail-writes"><span class="dl">Writes (words / combinations):</span> '+
+      writes='<div class="detail-writes"><span class="dl">Writes (words):</span> '+
         r.lg.map(function(w){var gw=WORDS[w];return '<a href="'+dictLink(w)+'" target="_blank" rel="noopener">'+esc(cleanLemma(w))+'</a>'+(gw?' <span class="gw">('+esc(gw)+')</span>':'');}).join(", ")+'</div>';
+    }
+    var combos="";
+    if(r.cb&&r.cb.length){
+      combos='<div class="detail-writes"><span class="dl">Combinations (writings it appears in):</span> '+
+        r.cb.map(function(c){return '<a href="https://www.ebl.lmu.de/tools/signs/'+encodeURIComponent(c[0])+'" target="_blank" rel="noopener">'+esc(c[0])+'</a> <span class="gw">('+esc(c[1])+')</span>';}).join(", ")+'</div>';
     }
     openModal('<div class="detail">'+
       '<div class="detail-glyph">'+signSVG(r.polys)+'</div>'+
@@ -532,7 +537,7 @@
         '<div class="detail-name">'+esc(r.name||("U+"+r.cp))+'</div>'+
         '<div class="detail-meta">'+esc(meta)+'</div>'+
         (rd?'<div class="detail-rd"><span class="dl">Readings:</span> '+esc(rd)+'</div>':'')+
-        writes+
+        writes+combos+
         '<div class="detail-actions">'+
           '<button data-act="canvas">🖊 Add to canvas</button>'+
           '<button data-act="sentence">➕ Add to sentence</button>'+

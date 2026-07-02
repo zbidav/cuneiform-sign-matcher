@@ -8,7 +8,7 @@ re-run merges from cache without re-hitting eBL. Pass --refresh to re-fetch from
 Pipeline order: tools/extract_signs.py (base vector data) -> tools/fetch_ebl_meta.py (enrich).
 """
 
-import json, os, sys, urllib.request, urllib.parse, concurrent.futures
+import json, os, re, sys, urllib.request, urllib.parse, concurrent.futures
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(HERE, "docs/js/signs-data.js")
@@ -58,6 +58,26 @@ def logogram_words(d):
     return words[:12]
 
 
+def combinations(d):
+    # Multi-sign logographic writings the sign appears in, e.g. GAR.KUR = šakin māti.
+    # form from the ATF logogram (determinatives stripped); Akkadian reading from *...*.
+    out, seen = [], set()
+    for lg in d.get("logograms", []) or []:
+        atf = lg.get("atf") or ""
+        form = re.sub(r"\{[^}]*\}", "", atf)               # drop determinatives {lu2}
+        if not re.search(r"[-.×+]", form):                 # keep multi-sign writings only
+            continue
+        m = re.search(r"\*([^*]+)\*", lg.get("schrammLogogramme") or "")
+        if not m:                                          # skip cross-reference "→" entries
+            continue
+        form = re.sub(r"\s*\(.*$", "", form).replace("-", ".").strip()
+        akk = m.group(1).strip()
+        if form and akk and form not in seen:
+            seen.add(form)
+            out.append([form, akk])
+    return out[:16]
+
+
 def op_score(rec):
     # How "compound" an eBL name is (count of combination operators). Lower = more basal.
     e = rec.get("ebl") or ""
@@ -85,7 +105,7 @@ def fetch_one(sign):
         readings = [r for r in (reading_str(v) for v in d.get("values", [])) if r]
         # `ebl` is the exact name string that resolved -> use it to build the sign-page link.
         return cp, {"ebl": cand, "mzl": lists.get("MZL"), "abz": lists.get("ABZ"),
-                    "readings": readings, "lg": logogram_words(d)}
+                    "readings": readings, "lg": logogram_words(d), "cb": combinations(d)}
     return cp, None
 
 
@@ -105,7 +125,7 @@ def fetch_mzl(n):
         lists = {l.get("name"): l.get("number") for l in d.get("lists", [])}
         readings = [r for r in (reading_str(v) for v in d.get("values", [])) if r]
         rec = {"ebl": d.get("name"), "mzl": lists.get("MZL"), "abz": lists.get("ABZ"),
-               "readings": readings, "lg": logogram_words(d)}
+               "readings": readings, "lg": logogram_words(d), "cb": combinations(d)}
         # Only 1:1 signs claim a codepoint. A sequence like |ZI&ZI.A| (unicode=[ZI&ZI, A])
         # must NOT hijack the basal codepoints of its components (that mislinked "A" -> ZI&ZI.A).
         uni = d.get("unicode", [])
@@ -158,6 +178,8 @@ def main():
             s["r"] = m["readings"][:40]
         if m.get("lg"):
             s["lg"] = m["lg"]
+        if m.get("cb"):
+            s["cb"] = m["cb"]
     payload = "window.SIGNS=" + json.dumps(signs, separators=(",", ":")) + ";\n"
     open(DATA, "w").write(payload)
     enriched = sum(1 for s in signs if "e" in s)
