@@ -5,6 +5,7 @@ segments and each contour is decimated (Ramer-Douglas-Peucker), so signs become
 line/vector data suitable for geometric matching against hand-drawn strokes."""
 
 import json
+import unicodedata
 from fontTools.ttLib import TTFont
 from fontTools.pens.basePen import BasePen
 
@@ -72,7 +73,17 @@ def main():
             d = rdp(ct, eps)
             contours.append([[round(x), round(y)] for x, y in d])
         if not contours: continue
-        signs.append({"c": chr(cp), "cp": format(cp, "X"), "g": contours})
+        # Sign name from the Unicode character name (e.g. "CUNEIFORM SIGN GU" -> "GU").
+        # These names largely match eBL's sign-list names, so they double as eBL deep-links.
+        try:
+            nm = unicodedata.name(chr(cp))
+        except ValueError:
+            nm = ""
+        for pre in ("CUNEIFORM SIGN ", "CUNEIFORM NUMERIC SIGN ", "CUNEIFORM PUNCTUATION SIGN "):
+            if nm.startswith(pre):
+                nm = nm[len(pre):]
+                break
+        signs.append({"c": chr(cp), "cp": format(cp, "X"), "n": nm, "g": contours})
     payload = "window.SIGNS=" + json.dumps(signs, separators=(",", ":")) + ";\n"
     with open(OUT, "w") as fh:
         fh.write(payload)
