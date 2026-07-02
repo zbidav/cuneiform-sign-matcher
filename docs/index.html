@@ -68,6 +68,7 @@
       <span class="grouplabel">Draw</span>
       <button id="t-line" class="active" title="Straight line: press and drag">╱ Line</button>
       <button id="t-pen" title="Freehand (auto-straightened into segments)">✎ Freehand</button>
+      <button id="t-erase" title="Erase: click or drag over a stroke/wedge to remove it">🩹 Erase</button>
     </div>
     <div class="toolbar">
       <span class="grouplabel">Stamp a wedge — click to place, drag to set its angle</span>
@@ -321,6 +322,25 @@
     }
   }
 
+  // ---- eraser: remove whole strokes/wedges under the cursor (vector, not pixels) ----
+  var erasing=false;
+  function segDist(px,py,ax,ay,bx,by){
+    var dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy,t=L2?((px-ax)*dx+(py-ay)*dy)/L2:0;t=t<0?0:t>1?1:t;
+    var cx=ax+t*dx,cy=ay+t*dy;return Math.hypot(px-cx,py-cy);
+  }
+  function strokeDist(p,st){
+    var polys=st.contours?st.contours:[st.pts||st],m=1e9,a,i;
+    for(a=0;a<polys.length;a++){var pl=polys[a];
+      if(pl.length===1){var d0=Math.hypot(p[0]-pl[0][0],p[1]-pl[0][1]);if(d0<m)m=d0;continue;}
+      for(i=0;i<pl.length-1;i++){var dd=segDist(p[0],p[1],pl[i][0],pl[i][1],pl[i+1][0],pl[i+1][1]);if(dd<m)m=dd;}}
+    return m;
+  }
+  function eraseAt(p){
+    var R=16,changed=false;
+    for(var i=strokes.length-1;i>=0;i--){if(strokeDist(p,strokes[i])<R){strokes.splice(i,1);changed=true;}}
+    if(changed)redraw();
+  }
+
   var wedgeDrag=null;
   function previewWedge(){
     redraw();
@@ -329,17 +349,20 @@
   }
   canvas.addEventListener("pointerdown",function(e){
     e.preventDefault();var p=pos(e);
+    if(mode==="erase"){erasing=true;eraseAt(p);return;}
     if(mode==="wedge"){wedgeDrag={cx:p[0],cy:p[1],angle:WEDGE_DEFAULT[wedgeKind]||0,size:120};previewWedge();return;}
     raw={pts:[p],kind:null};
   });
   canvas.addEventListener("pointermove",function(e){
     var p=pos(e);
+    if(erasing){e.preventDefault();eraseAt(p);return;}
     if(wedgeDrag){e.preventDefault();var dx=p[0]-wedgeDrag.cx,dy=p[1]-wedgeDrag.cy;if(Math.hypot(dx,dy)>8)wedgeDrag.angle=Math.atan2(dy,dx);previewWedge();return;}
     if(!raw)return;e.preventDefault();
     if(mode==="line")raw.pts=[raw.pts[0],p]; else raw.pts.push(p);
     redraw();
   });
   window.addEventListener("pointerup",function(){
+    if(erasing){erasing=false;if(txt)txt.value="";search();return;}
     if(wedgeDrag){strokes.push(makeWedgePoly(wedgeKind,wedgeDrag.cx,wedgeDrag.cy,wedgeDrag.angle,wedgeDrag.size));wedgeDrag=null;if(txt)txt.value="";redraw();search();return;}
     if(!raw)return;
     if(mode==="pen")raw.pts=rdp(raw.pts,4);   // straighten freehand into segments
@@ -438,13 +461,15 @@
   function setDraw(m){mode=m;wedgeKind=null;
     document.getElementById("t-line").classList.toggle("active",m==="line");
     document.getElementById("t-pen").classList.toggle("active",m==="pen");
+    document.getElementById("t-erase").classList.toggle("active",m==="erase");
     var ws=document.querySelectorAll(".wedge");for(var i=0;i<ws.length;i++)ws[i].classList.remove("active");}
   document.getElementById("t-line").onclick=function(){setDraw("line");};
   document.getElementById("t-pen").onclick=function(){setDraw("pen");};
+  document.getElementById("t-erase").onclick=function(){setDraw("erase");};
   var ws=document.querySelectorAll(".wedge");
   for(var w=0;w<ws.length;w++)(function(btn){btn.onclick=function(){
     mode="wedge";wedgeKind=btn.getAttribute("data-kind");
-    document.getElementById("t-line").classList.remove("active");document.getElementById("t-pen").classList.remove("active");
+    document.getElementById("t-line").classList.remove("active");document.getElementById("t-pen").classList.remove("active");document.getElementById("t-erase").classList.remove("active");
     for(var i=0;i<ws.length;i++)ws[i].classList.remove("active");btn.classList.add("active");
   };})(ws[w]);
   document.getElementById("undo").onclick=function(){strokes.pop();redraw();search();};
