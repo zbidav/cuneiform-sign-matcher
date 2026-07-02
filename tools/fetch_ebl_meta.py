@@ -38,6 +38,16 @@ def candidates(nm):
         yield base
 
 
+def reading_str(v):
+    # eBL stores a reading as a base value + a homophone index (subIndex). The written form
+    # appends the index only when >1: value "gur" subIndex 2 -> "gur2"; subIndex 1/None -> "gur".
+    val = v.get("value")
+    if not val:
+        return None
+    si = v.get("subIndex")
+    return val + str(si) if isinstance(si, int) and si > 1 else val
+
+
 def load_signs():
     txt = open(DATA).read()
     return json.loads(txt[len("window.SIGNS="):-2])
@@ -56,7 +66,7 @@ def fetch_one(sign):
         except Exception:
             continue
         lists = {l.get("name"): l.get("number") for l in d.get("lists", [])}
-        readings = [v.get("value") for v in d.get("values", []) if v.get("value")]
+        readings = [r for r in (reading_str(v) for v in d.get("values", [])) if r]
         # `ebl` is the exact name string that resolved -> use it to build the sign-page link.
         return cp, {"ebl": cand, "mzl": lists.get("MZL"), "abz": lists.get("ABZ"), "readings": readings}
     return cp, None
@@ -76,10 +86,13 @@ def fetch_mzl(n):
     recs = []
     for d in data if isinstance(data, list) else []:
         lists = {l.get("name"): l.get("number") for l in d.get("lists", [])}
-        readings = [v.get("value") for v in d.get("values", []) if v.get("value")]
+        readings = [r for r in (reading_str(v) for v in d.get("values", [])) if r]
         rec = {"ebl": d.get("name"), "mzl": lists.get("MZL"), "abz": lists.get("ABZ"), "readings": readings}
-        for cp in d.get("unicode", []):
-            recs.append((format(int(cp), "X"), rec))
+        # Only 1:1 signs claim a codepoint. A sequence like |ZI&ZI.A| (unicode=[ZI&ZI, A])
+        # must NOT hijack the basal codepoints of its components (that mislinked "A" -> ZI&ZI.A).
+        uni = d.get("unicode", [])
+        if len(uni) == 1:
+            recs.append((format(int(uni[0]), "X"), rec))
     return recs
 
 

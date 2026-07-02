@@ -11,49 +11,55 @@
   is geometric: drawing and sign become normalized point clouds compared by chamfer distance.
 -->
 <style>
-  :root{--bg:#f4f1ea;--ink:#2b2320;--accent:#8a6d3b;--accentd:#6b5324;--panel:#fffdf8;--line:#d8cfbe;}
+  :root{--bg:#f4f1ea;--ink:#2b2320;--accent:#8a6d3b;--accentd:#6b5324;--panel:#fffdf8;--line:#d8cfbe;--card:#ffffff;--muted:#8b8272;}
+  body.dark{--bg:#000000;--ink:#f2efe6;--accent:#caa76a;--accentd:#d8b878;--panel:#121212;--line:#333333;--card:#191919;--muted:#9a978c;}
   *{box-sizing:border-box}
   body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg)}
-  header{padding:16px 22px 4px}
+  header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 22px 4px}
   h1{margin:0;font-size:1.45rem}
-  .sub{margin:4px 0 0;color:#6d655a}
-  .tag{display:inline-block;margin-left:8px;padding:1px 8px;font-size:.72rem;border:1px solid var(--line);border-radius:10px;color:var(--accentd);background:#fff}
+  .sub{margin:4px 0 0;color:var(--muted)}
+  .tag{display:inline-block;margin-left:8px;padding:1px 8px;font-size:.72rem;border:1px solid var(--line);border-radius:10px;color:var(--accentd);background:var(--card)}
   main{display:grid;grid-template-columns:minmax(300px,460px) 1fr;gap:18px;padding:12px 22px 22px;align-items:start}
   @media(max-width:820px){main{grid-template-columns:1fr}}
   .pane{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
   .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
-  .grouplabel{width:100%;font-size:.72rem;color:#8b8272;margin:4px 0 -2px}
-  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);padding:6px 11px;border-radius:8px}
+  .grouplabel{width:100%;font-size:.72rem;color:var(--muted);margin:4px 0 -2px}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:6px 11px;border-radius:8px}
   button:hover{border-color:var(--accent)}
   button.active{background:var(--accent);color:#fff;border-color:var(--accentd)}
   .wedge{font-size:.95rem;line-height:1;padding:6px 11px}
   .primary{background:var(--accent);color:#fff;border-color:var(--accentd);font-weight:600}
   .primary:hover{background:var(--accentd)}
-  #pad{display:block;width:100%;max-width:440px;aspect-ratio:1/1;background:#fffef9;border:2px dashed var(--line);border-radius:10px;touch-action:none;cursor:crosshair;margin-top:8px}
+  #pad{display:block;width:100%;max-width:440px;aspect-ratio:1/1;background:var(--panel);border:2px dashed var(--line);border-radius:10px;touch-action:none;cursor:crosshair;margin-top:8px}
   .actions{display:flex;align-items:center;gap:12px;margin-top:10px}
-  .status{color:#8b8272;font-size:.85rem}
+  .status{color:var(--muted);font-size:.85rem}
   h2{margin:0 0 4px;font-size:1.05rem}
-  .hint{margin:0 0 10px;color:#8b8272;font-size:.82rem}
+  .hint{margin:0 0 10px;color:var(--muted);font-size:.82rem}
   .period{display:flex;align-items:center;gap:8px;margin:2px 0 12px;flex-wrap:wrap}
-  .period select{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}
-  .period .note{font-size:.75rem;color:#a99}
+  .period select,.period input{font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+  #txtsearch{flex:1;min-width:150px}
+  .period .note{font-size:.75rem;color:var(--muted)}
   .results{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:9px}
-  .card{min-width:0;border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px;text-align:center;text-decoration:none;color:inherit;transition:transform .08s,border-color .08s}
+  .card{position:relative;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:6px;text-align:center;text-decoration:none;color:var(--ink);transition:transform .08s,border-color .08s}
   .card:hover{transform:translateY(-2px);border-color:var(--accent)}
   .card svg{width:100%;height:52px;display:block}
   .card .nm{display:block;max-width:100%;font-size:.74rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .card .rd{display:block;max-width:100%;font-size:.66rem;color:#6d655a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .card .cp{display:block;font-size:.66rem;color:#8b8272}
-  .card .sc{font-size:.68rem;color:var(--accentd);font-weight:600}
-  footer{display:flex;flex-wrap:wrap;gap:16px;padding:10px 22px 26px;color:#8b8272;font-size:.8rem}
+  .card .rd{display:block;max-width:100%;font-size:.66rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .cp{display:block;font-size:.66rem;color:var(--muted)}
+  .addbtn{position:absolute;top:3px;right:3px;width:20px;height:20px;line-height:1;padding:0;font-size:14px;border-radius:6px;background:var(--card);color:var(--accentd);border:1px solid var(--line);opacity:.55}
+  .addbtn:hover{opacity:1;background:var(--accent);color:#fff;border-color:var(--accentd)}
+  footer{display:flex;flex-wrap:wrap;gap:16px;padding:10px 22px 26px;color:var(--muted);font-size:.8rem}
   footer a{color:var(--accentd)}
 </style>
 </head>
 <body>
 <header>
-  <h1>Cuneiform Sign Matcher</h1>
-  <p class="sub">Draw a sign, or build it from wedges, and search the sign list by shape.
-    <span class="tag">prototype</span></p>
+  <div>
+    <h1>Cuneiform Sign Matcher</h1>
+    <p class="sub">Draw a sign, or build it from wedges, and search the sign list by shape.
+      <span class="tag">prototype</span></p>
+  </div>
+  <button id="darkToggle" title="Toggle dark mode">🌙 Dark</button>
 </header>
 
 <main>
@@ -81,6 +87,10 @@
 
   <section class="pane">
     <h2>Candidates</h2>
+    <div class="period">
+      <label for="txtsearch">Find by name / reading:</label>
+      <input id="txtsearch" type="text" placeholder="e.g. gur2, lugal, an" autocomplete="off">
+    </div>
     <div class="period">
       <label for="period">Period:</label>
       <select id="period">
@@ -121,6 +131,8 @@
 (function(){
   var statusEl=document.getElementById("status"), resultsEl=document.getElementById("results");
   var canvas=document.getElementById("pad"), ctx=canvas.getContext("2d");
+  // Canvas colors are drawn in JS, so they follow a theme object (CSS can't reach the canvas).
+  var THEME={paper:"#fffef9", ink:"#1a1410", accent:"#8a6d3b"};
 
   // ---- geometry: normalize polylines to a unit box, densify to a point cloud ----
   // Accepts either raw point arrays (reference contours) or {pts:[...]} stroke objects.
@@ -217,7 +229,7 @@
     for(i=0;i<polys.length;i++){pl=polys[i];
       for(j=0;j<pl.length;j++){var X=(pl[j][0]-minX)*s+ox,Y=(pl[j][1]-minY)*s+oy;d+=(j?"L":"M")+X.toFixed(1)+" "+Y.toFixed(1);}
       d+="Z";}
-    return '<svg viewBox="0 0 100 100"><path d="'+d+'" fill="#2b2320" fill-rule="evenodd"/></svg>';
+    return '<svg viewBox="0 0 100 100"><path d="'+d+'" fill="currentColor" fill-rule="evenodd"/></svg>';
   }
   // Unicode sign name -> eBL sign-list name (e.g. "KA TIMES BAD" -> "KA×BAD").
   function eblName(n){return n.replace(/ TIMES /g,"×").replace(/ PLUS /g,"+");}
@@ -273,19 +285,19 @@
   // Flatten strokes into plain polylines for the matcher (wedge stamps carry .contours).
   function strokePolys(list){var out=[];for(var i=0;i<list.length;i++){var st=list[i];if(st.contours)out=out.concat(st.contours);else out.push(st.pts||st);}return out;}
   function redraw(){
-    ctx.fillStyle="#fffef9";ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle=THEME.paper;ctx.fillRect(0,0,canvas.width,canvas.height);
     var all=strokes.concat(raw?[raw]:[]);
     for(var i=0;i<all.length;i++){
       var st=all[i];
-      if(st.contours){fillContours(st.contours,"#1a1410");continue;}   // filled wedge glyph
+      if(st.contours){fillContours(st.contours,THEME.ink);continue;}   // filled wedge glyph
       var pl=st.pts||st;
       if(pl.length<1)continue;
-      ctx.strokeStyle="#1a1410";ctx.lineWidth=6;ctx.lineCap="round";ctx.lineJoin="round";
+      ctx.strokeStyle=THEME.ink;ctx.lineWidth=6;ctx.lineCap="round";ctx.lineJoin="round";
       ctx.beginPath();ctx.moveTo(pl[0][0],pl[0][1]);
       for(var k=1;k<pl.length;k++)ctx.lineTo(pl[k][0],pl[k][1]);
       if(pl.length===1)ctx.lineTo(pl[0][0]+0.1,pl[0][1]+0.1);
       ctx.stroke();
-      ctx.fillStyle="#8a6d3b";for(var d=0;d<pl.length;d++){ctx.beginPath();ctx.arc(pl[d][0],pl[d][1],3,0,7);ctx.fill();}
+      ctx.fillStyle=THEME.accent;for(var d=0;d<pl.length;d++){ctx.beginPath();ctx.arc(pl[d][0],pl[d][1],3,0,7);ctx.fill();}
     }
   }
 
@@ -293,7 +305,7 @@
   function previewWedge(){
     redraw();
     var wp=makeWedgePoly(wedgeKind,wedgeDrag.cx,wedgeDrag.cy,wedgeDrag.angle,wedgeDrag.size);
-    fillContours(wp.contours,"#8a6d3b");
+    fillContours(wp.contours,THEME.accent);
   }
   canvas.addEventListener("pointerdown",function(e){
     e.preventDefault();var p=pos(e);
@@ -308,17 +320,43 @@
     redraw();
   });
   window.addEventListener("pointerup",function(){
-    if(wedgeDrag){strokes.push(makeWedgePoly(wedgeKind,wedgeDrag.cx,wedgeDrag.cy,wedgeDrag.angle,wedgeDrag.size));wedgeDrag=null;redraw();search();return;}
+    if(wedgeDrag){strokes.push(makeWedgePoly(wedgeKind,wedgeDrag.cx,wedgeDrag.cy,wedgeDrag.angle,wedgeDrag.size));wedgeDrag=null;if(txt)txt.value="";redraw();search();return;}
     if(!raw)return;
     if(mode==="pen")raw.pts=rdp(raw.pts,4);   // straighten freehand into segments
     if(raw.pts.length>=2||strokes.length===0)strokes.push(raw);
-    raw=null;redraw();search();
+    raw=null;if(txt)txt.value="";redraw();search();
   });
 
-  // ---- search ---------------------------------------------------------------
+  // ---- results rendering ----------------------------------------------------
+  // Build one result card. `sim` is shape-similarity (null for text search). Each card links
+  // to the eBL sign page and has a "+" button to add the sign onto the canvas (right -> left).
+  function makeCard(r,sim){
+    var nm=r.name||("U+"+r.cp);
+    var rd=r.readings?r.readings.slice(0,8).join(", "):"";
+    var ref=r.mzl?("MZL "+r.mzl):("U+"+r.cp);
+    var isAll=periodSel&&periodSel.value==="All periods";
+    var pd=(sim!=null&&isAll&&r.period&&PABBR[r.period])?esc(PABBR[r.period])+" · ":"";
+    var tail=(sim!=null)?(" · "+sim.toFixed(2)):"";
+    var a=document.createElement("a");a.className="card";
+    a.title=nm+(r.readings?(" — "+r.readings.join(", ")):"")+(r.mzl?("  ·  MZL "+r.mzl):"")+(r.abz?("  ABZ "+r.abz):"")+(r.period?("  ["+r.period+"]"):"");
+    a.href=r.ebl?"https://www.ebl.lmu.de/tools/signs/"+encodeURIComponent(r.ebl):"https://www.ebl.lmu.de/tools/signs";
+    a.target="_blank";a.rel="noopener";
+    a.innerHTML=signSVG(r.polys)+
+      '<span class="nm">'+esc(nm)+'</span>'+
+      (rd?'<span class="rd">'+esc(rd)+'</span>':'')+
+      '<span class="cp">'+pd+esc(ref)+tail+'</span>';
+    var add=document.createElement("button");
+    add.className="addbtn";add.textContent="+";add.title="Add this sign onto the canvas";
+    add.onclick=function(ev){ev.preventDefault();ev.stopPropagation();addToCanvas(r.polys);};
+    a.appendChild(add);
+    return a;
+  }
+
+  // ---- shape search (draw -> match by shape) --------------------------------
   function search(){
+    if(txt&&txt.value.trim()){textSearch(txt.value);return;}   // an active text query wins
     if(!REF.length){statusEl.textContent="Still loading…";return;}
-    if(!strokes.length){resultsEl.innerHTML="";statusEl.textContent="Draw a sign to search.";return;}
+    if(!strokes.length){resultsEl.innerHTML="";statusEl.textContent="Draw a sign, or search by name.";return;}
     var isAll=periodSel&&periodSel.value==="All periods";
     var N=parseInt(topnSel.value,10)||24;
     var A=pointCloud(strokePolys(strokes));
@@ -327,27 +365,52 @@
     var seen={},top=[];                       // one card per sign (best-matching form)
     for(var si=0;si<scored.length&&top.length<N;si++){var cpk=scored[si].r.cp;if(seen[cpk])continue;seen[cpk]=1;top.push(scored[si]);}
     resultsEl.innerHTML="";
-    for(var i=0;i<top.length;i++){
-      var r=top[i].r, sim=Math.max(0,1-top[i].d);
-      var nm=r.name||("U+"+r.cp);
-      var rd=r.readings?r.readings.slice(0,8).join(", "):"";
-      var ref=r.mzl?("MZL "+r.mzl):("U+"+r.cp);
-      var pd=(isAll&&r.period&&PABBR[r.period])?esc(PABBR[r.period])+" · ":"";
-      var a=document.createElement("a");a.className="card";
-      a.title=nm+(rd?(" — "+r.readings.join(", ")):"")+(r.mzl?("  ·  MZL "+r.mzl):"")+(r.abz?("  ABZ "+r.abz):"")+(r.period?("  ["+r.period+"]"):"");
-      // Link to the verified eBL sign page (r.ebl was confirmed to resolve). Signs with no
-      // eBL match go to the clean sign-search page — never ?query= (eBL rejects that param).
-      a.href = r.ebl
-        ? "https://www.ebl.lmu.de/tools/signs/"+encodeURIComponent(r.ebl)
-        : "https://www.ebl.lmu.de/tools/signs";
-      a.target="_blank";a.rel="noopener";
-      a.innerHTML=signSVG(r.polys)+
-        '<span class="nm">'+esc(nm)+'</span>'+
-        (rd?'<span class="rd">'+esc(rd)+'</span>':'')+
-        '<span class="cp">'+pd+esc(ref)+' · '+sim.toFixed(2)+'</span>';
-      resultsEl.appendChild(a);
-    }
+    for(var i=0;i<top.length;i++)resultsEl.appendChild(makeCard(top[i].r,Math.max(0,1-top[i].d)));
     statusEl.textContent="Top "+top.length+" signs"+(isAll?" (all periods)":"");
+  }
+
+  // ---- text search (by sign name or reading, e.g. "gur2") -------------------
+  var SIGNLIST=[];
+  function buildSignList(){
+    for(var i=0;i<window.SIGNS.length;i++){
+      var s=window.SIGNS[i], flipped=[];
+      for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
+      var mt=META[s.cp]||{};
+      SIGNLIST.push({cp:s.cp,name:s.n||"",readings:mt.r||null,mzl:mt.m||"",abz:mt.z||"",ebl:mt.e||"",polys:flipped});
+    }
+  }
+  function textSearch(q){
+    q=(q||"").trim().toLowerCase();
+    if(!q){search();return;}
+    var hits=[],i;
+    for(i=0;i<SIGNLIST.length;i++){
+      var s=SIGNLIST[i], nml=s.name.toLowerCase(), rr=s.readings||[], rs=99;
+      if(nml===q)rs=0;
+      else if(rr.indexOf(q)>=0)rs=1;
+      else if(nml.indexOf(q)===0)rs=2;
+      else if(rr.some(function(x){return x.indexOf(q)===0;}))rs=3;
+      else if(nml.indexOf(q)>=0)rs=4;
+      else if(rr.some(function(x){return x.indexOf(q)>=0;}))rs=5;
+      if(rs<99)hits.push({s:s,rs:rs});
+    }
+    hits.sort(function(a,b){return a.rs-b.rs;});
+    var N=parseInt(topnSel.value,10)||24;
+    resultsEl.innerHTML="";
+    for(var j=0;j<hits.length&&j<N;j++)resultsEl.appendChild(makeCard(hits[j].s,null));
+    statusEl.textContent=hits.length+' sign'+(hits.length===1?'':'s')+' matching "'+q+'"'+(hits.length>N?(" (showing "+N+")"):"");
+  }
+
+  // ---- add a found/known sign onto the canvas (right pane -> left canvas) ----
+  var addOffset=0;
+  function addToCanvas(polys){
+    var mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+    polys.forEach(function(c){c.forEach(function(p){if(p[0]<mnx)mnx=p[0];if(p[0]>mxx)mxx=p[0];if(p[1]<mny)mny=p[1];if(p[1]>mxy)mxy=p[1];});});
+    var w=mxx-mnx,h=mxy-mny,sc=200/(Math.max(w,h)||1);
+    var off=((addOffset++%3)-1)*46, cx=canvas.width/2+off, cy=canvas.height/2+off, mx=(mnx+mxx)/2, my=(mny+mxy)/2;
+    var cons=polys.map(function(c){return c.map(function(p){return [cx+(p[0]-mx)*sc, cy+(p[1]-my)*sc];});});
+    strokes.push({contours:cons,fill:true});
+    if(txt)txt.value="";                       // switch back to shape mode with the sign placed
+    redraw();search();
   }
 
   // ---- ui -------------------------------------------------------------------
@@ -364,7 +427,7 @@
     for(var i=0;i<ws.length;i++)ws[i].classList.remove("active");btn.classList.add("active");
   };})(ws[w]);
   document.getElementById("undo").onclick=function(){strokes.pop();redraw();search();};
-  document.getElementById("clear").onclick=function(){strokes=[];redraw();resultsEl.innerHTML="";statusEl.textContent="Draw a sign to search.";};
+  document.getElementById("clear").onclick=function(){strokes=[];if(txt)txt.value="";redraw();resultsEl.innerHTML="";statusEl.textContent="Draw a sign, or search by name.";};
   document.getElementById("search").onclick=search;
 
   // Period selector really switches the reference set (each period = its own font's forms).
@@ -372,10 +435,24 @@
   periodSel.onchange=function(){selectPeriod(periodSel.value);};
   var topnSel=document.getElementById("topn");
   topnSel.onchange=function(){search();};
+  var txt=document.getElementById("txtsearch");
+  txt.oninput=function(){textSearch(txt.value);};
+
+  // Dark mode: toggle body.dark (swaps CSS vars) + canvas THEME colors; remembered per browser.
+  var dt=document.getElementById("darkToggle");
+  function applyTheme(dark){
+    if(dark){THEME.paper="#0a0a0a";THEME.ink="#f2efe6";THEME.accent="#caa76a";document.body.classList.add("dark");dt.textContent="☀ Light";}
+    else{THEME.paper="#fffef9";THEME.ink="#1a1410";THEME.accent="#8a6d3b";document.body.classList.remove("dark");dt.textContent="🌙 Dark";}
+    try{localStorage.setItem("cm_dark",dark?"1":"0");}catch(e){}
+    redraw();
+  }
+  dt.onclick=function(){applyTheme(!document.body.classList.contains("dark"));};
+  var _sd=false;try{_sd=localStorage.getItem("cm_dark")==="1";}catch(e){}
+  applyTheme(_sd);
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
-    buildMeta();initStamps();redraw();
+    buildMeta();buildSignList();initStamps();redraw();
     selectPeriod(periodSel.value);   // default = All periods
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
