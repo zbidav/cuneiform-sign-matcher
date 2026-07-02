@@ -59,6 +59,7 @@
   .sentgloss{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:.83rem;line-height:1.6}
   .sentgloss a{color:var(--accentd);text-decoration:none}
   .sentgloss a:hover{text-decoration:underline}
+  .gloss-line{margin:3px 0}
   .gw{color:var(--muted)}
   .lines{display:flex;flex-direction:column;gap:5px}
   .sent-line{display:flex;align-items:center;gap:6px;padding:4px;border:1px solid transparent;border-radius:8px;cursor:pointer}
@@ -636,17 +637,64 @@
     });
     renderGloss();
   }
+  // ---- combination detection: match a line's signs to known writings (blanks = wildcards) ----
+  var COMBOS=[];
+  function normTok(t){return t.replace(/[₀-₉]/g,function(m){return String(m.charCodeAt(0)-0x2080);}).toLowerCase();}
+  function buildCombos(){
+    COMBOS=[];
+    for(var i=0;i<window.SIGNS.length;i++){
+      var cb=window.SIGNS[i].cb;if(!cb)continue;
+      for(var j=0;j<cb.length;j++){
+        var toks=cb[j][0].split(".");for(var k=0;k<toks.length;k++)toks[k]=normTok(toks[k]);
+        COMBOS.push({toks:toks,form:cb[j][0],akk:cb[j][1]});
+      }
+    }
+  }
+  function signCands(cp){
+    var s=SIGNMAP[cp],c={};if(!s)return c;
+    if(s.name)c[normTok(s.name)]=1;
+    if(s.ebl)c[normTok(s.ebl)]=1;
+    var rr=s.readings||[];for(var i=0;i<rr.length;i++)c[normTok(rr[i])]=1;
+    return c;
+  }
+  function matchLine(cells){
+    var cc=[];for(var i=0;i<cells.length;i++)cc.push(cells[i].b?null:signCands(cells[i].cp));
+    var res=[];
+    for(var m=0;m<COMBOS.length&&res.length<6;m++){
+      var C=COMBOS[m];if(C.toks.length!==cells.length)continue;
+      var ok=true,fill=[];
+      for(var j=0;j<C.toks.length;j++){
+        if(cc[j]===null)fill.push(C.toks[j]);
+        else if(!cc[j][C.toks[j]]){ok=false;break;}
+      }
+      if(ok)res.push({form:C.form,akk:C.akk,fill:fill});
+    }
+    return res;
+  }
   function renderGloss(){
     if(!lines.some(function(l){return l.length;})){glossEl.hidden=true;glossEl.innerHTML="";return;}
-    var out=lines.map(function(cells){
-      if(!cells.length)return null;
-      return cells.map(function(cell){
+    var html="";
+    lines.forEach(function(cells,li){
+      if(!cells.length)return;
+      var reading=cells.map(function(cell){
         if(cell.b)return '<span class="gw">'+(cell.t?esc(cell.t):"…")+'</span>';
         var s=SIGNMAP[cell.cp];return esc(s?s.name:("U+"+cell.cp));
       }).join(".");
-    }).filter(function(x){return x;});
+      var extra="";
+      if(cells.length>=2){
+        var mm=matchLine(cells);
+        if(mm.length){
+          var hasBlank=cells.some(function(c){return c.b;});
+          extra=' <span class="gw">'+(hasBlank?"could be":"=")+'</span> '+mm.slice(0,4).map(function(x){
+            var lab=esc(x.form)+' <span class="gw">('+esc(x.akk)+(x.fill.length?"; gap: "+esc(x.fill.join(", ")):"")+')</span>';
+            return '<a href="https://www.ebl.lmu.de/tools/signs/'+encodeURIComponent(x.form)+'" target="_blank" rel="noopener">'+lab+'</a>';
+          }).join(' <span class="gw"> · </span> ');
+        }
+      }
+      html+='<div class="gloss-line"><span class="gw">'+(li+1)+'.</span> <b>'+reading+'</b>'+extra+'</div>';
+    });
     glossEl.hidden=false;
-    glossEl.innerHTML='<span class="gw">Logographic reading (sign names): </span><b>'+out.join("  /  ")+'</b>';
+    glossEl.innerHTML=html;
   }
 
   // ---- ui -------------------------------------------------------------------
@@ -712,7 +760,7 @@
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
-    buildMeta();buildSignList();loadLines();renderSentence();initStamps();redraw();
+    buildMeta();buildSignList();buildCombos();loadLines();renderSentence();initStamps();redraw();
     selectPeriod(periodSel.value);   // default = All periods
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
