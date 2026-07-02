@@ -84,7 +84,8 @@
     <div class="period">
       <label for="period">Period:</label>
       <select id="period">
-        <option value="Neo-Assyrian" selected>Neo-Assyrian (Assurbanipal)</option>
+        <option value="All periods" selected>All periods</option>
+        <option value="Neo-Assyrian">Neo-Assyrian (Assurbanipal)</option>
         <option value="Old Babylonian">Old Babylonian (Santakku)</option>
         <option value="Middle Babylonian">Middle Babylonian (SantakkuM)</option>
         <option value="Neo-Babylonian">Neo-Babylonian (Esagil)</option>
@@ -143,6 +144,7 @@
   // and joined from the base (Noto) data by codepoint.
   var REF=[], META={}, REFCACHE={};
   var PERIODS={
+    "All periods":      {all:true, font:"all periods"},
     "Neo-Assyrian":     {v:"SIGNS_NA", f:"js/signs-na.js",  font:"Assurbanipal"},
     "Old Babylonian":   {v:"SIGNS_OB", f:"js/signs-ob.js",  font:"Santakku"},
     "Middle Babylonian":{v:"SIGNS_MB", f:"js/signs-mb.js",  font:"SantakkuM"},
@@ -150,16 +152,19 @@
     "Hittite":          {v:"SIGNS_HIT",f:"js/signs-hit.js", font:"Ullikummi"},
     "Modern (Noto)":    {v:"SIGNS",    f:null,              font:"Noto Sans Cuneiform"}
   };
+  var COMBINE=["Neo-Assyrian","Old Babylonian","Middle Babylonian","Neo-Babylonian","Hittite","Modern (Noto)"];
+  var PABBR={"Neo-Assyrian":"NA","Old Babylonian":"OB","Middle Babylonian":"MB","Neo-Babylonian":"NB","Hittite":"Hit","Modern (Noto)":"Noto"};
+  function loadAll(keys,cb){var i=0;(function nx(){if(i>=keys.length){cb();return;}ensureLoaded(PERIODS[keys[i]],function(){i++;nx();});})();}
   function buildMeta(){
     for(var i=0;i<window.SIGNS.length;i++){var s=window.SIGNS[i];META[s.cp]={m:s.m||"",z:s.z||"",r:s.r||null,e:s.e||""};}
   }
-  function buildRefsFrom(arr){
+  function buildRefsFrom(arr,period){
     var out=[];
     for(var i=0;i<arr.length;i++){
       var s=arr[i], flipped=[];
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
       var mt=META[s.cp]||{};
-      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,ebl:mt.e||"",polys:flipped,cloud:pointCloud(flipped)});
+      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,ebl:mt.e||"",period:period||"",polys:flipped,cloud:pointCloud(flipped)});
     }
     return out;
   }
@@ -173,15 +178,23 @@
     var cfg=PERIODS[label]; if(!cfg)return;
     if(REFCACHE[label]){REF=REFCACHE[label];afterPeriod(label);return;}
     statusEl.textContent="Loading "+label+" forms…";
+    if(cfg.all){
+      loadAll(COMBINE,function(){
+        var all=[];for(var k=0;k<COMBINE.length;k++){var c=PERIODS[COMBINE[k]];if(window[c.v])all=all.concat(buildRefsFrom(window[c.v],COMBINE[k]));}
+        REF=all;REFCACHE[label]=REF;afterPeriod(label);
+      });
+      return;
+    }
     ensureLoaded(cfg,function(err){
       if(err||!window[cfg.v]){periodMsg.style.color="#8a2c22";periodMsg.textContent="Could not load "+label+" forms.";return;}
-      REF=buildRefsFrom(window[cfg.v]);REFCACHE[label]=REF;afterPeriod(label);
+      REF=buildRefsFrom(window[cfg.v],label);REFCACHE[label]=REF;afterPeriod(label);
     });
   }
   function afterPeriod(label){
     var cfg=PERIODS[label];
     periodMsg.style.color="#8b8272";
-    periodMsg.textContent=cfg.font+" — "+REF.length+" sign forms"+(REF.length<879?" (this script covers a subset)":"");
+    if(cfg.all)periodMsg.textContent="All periods — "+REF.length+" forms across "+COMBINE.length+" scripts (best-matching form per sign).";
+    else periodMsg.textContent=cfg.font+" — "+REF.length+" sign forms"+(REF.length<879?" (this script covers a subset)":"");
     redraw();search();
   }
   function signSVG(polys){
@@ -213,36 +226,49 @@
     return [pts[0],pts[pts.length-1]];
   }
 
-  // A wedge is a filled shape you rotate to any angle. The canonical shape points along +x
-  // (tip at +x, base centered on the anchor); it is rotated by `angle` and placed at (cx,cy).
-  //   wedge       = triangular head + short tapering tail (a classic cuneiform wedge)
-  //   winkelhaken = compact head-only corner wedge
-  var WEDGE_DEFAULT={wedge:Math.PI/2, winkelhaken:3*Math.PI/4};   // screen coords, +y down
-  function wedgeShape(kind,size){
-    var w=size*0.30;
-    if(kind==="winkelhaken"){var v=size*0.52;return [[size*0.6,0],[0,v],[0,-v]];}
-    return [[size,0],[size*0.45,w],[0,w*0.22],[0,-w*0.22],[size*0.45,-w]];
+  // Wedge stamps use the REAL font outlines of the basic wedge signs, so the shapes are
+  // authentic rather than approximations: "wedge" = DIŠ (U+12079, the vertical wedge),
+  // "winkelhaken" = U (U+1230B). The glyph is normalized to a unit box centered at the
+  // origin, then scaled/rotated/placed. Applied rotation = angle − π/2, so a downward drag
+  // keeps the natural (vertical) orientation and dragging elsewhere rotates it.
+  var WEDGE_DEFAULT={wedge:Math.PI/2, winkelhaken:Math.PI/2};   // screen coords, +y down
+  var STAMP={};
+  function glyphStamp(cp){
+    var s=null,i;for(i=0;i<window.SIGNS.length;i++)if(window.SIGNS[i].cp===cp){s=window.SIGNS[i];break;}
+    if(!s)return null;
+    var cs=[],mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9,a,b;
+    for(a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(b=0;b<pl.length;b++){var x=pl[b][0],y=-pl[b][1];fp.push([x,y]);if(x<mnx)mnx=x;if(x>mxx)mxx=x;if(y<mny)mny=y;if(y>mxy)mxy=y;}cs.push(fp);}
+    var w=mxx-mnx,h=mxy-mny,sc=1/(Math.max(w,h)||1),cxg=(mnx+mxx)/2,cyg=(mny+mxy)/2,out=[];
+    for(a=0;a<cs.length;a++){var c=cs[a],nc=[];for(b=0;b<c.length;b++)nc.push([(c[b][0]-cxg)*sc,(c[b][1]-cyg)*sc]);out.push(nc);}
+    return out;   // contours normalized to ~[-0.5,0.5], centered on origin
   }
+  function initStamps(){STAMP.wedge=glyphStamp("12079");STAMP.winkelhaken=glyphStamp("1230B");}
   function makeWedgePoly(kind,cx,cy,angle,size){
-    var s=wedgeShape(kind,size),ca=Math.cos(angle),sa=Math.sin(angle),pts=[];
-    for(var i=0;i<s.length;i++){var x=s[i][0],y=s[i][1];pts.push([cx+x*ca-y*sa, cy+x*sa+y*ca]);}
-    pts.push(pts[0]);
-    return {pts:pts,kind:kind,fill:true};
+    var g=STAMP[kind], rot=angle-Math.PI/2, ca=Math.cos(rot), sa=Math.sin(rot), cons=[], k, j;
+    if(!g){                                        // fallback: simple triangle
+      var t=[[0,-size*0.5],[size*0.28,size*0.5],[-size*0.28,size*0.5]],p=[];
+      for(k=0;k<t.length;k++){var tx=t[k][0],ty=t[k][1];p.push([cx+tx*ca-ty*sa,cy+tx*sa+ty*ca]);}
+      p.push(p[0]);return {contours:[p],kind:kind,fill:true};
+    }
+    for(k=0;k<g.length;k++){var c=g[k],pc=[];for(j=0;j<c.length;j++){var X=c[j][0]*size,Y=c[j][1]*size;pc.push([cx+X*ca-Y*sa, cy+X*sa+Y*ca]);}pc.push(pc[0]);cons.push(pc);}
+    return {contours:cons,kind:kind,fill:true};
   }
 
+  function fillContours(cons,color){
+    ctx.fillStyle=color;ctx.beginPath();
+    for(var k=0;k<cons.length;k++){var c=cons[k];ctx.moveTo(c[0][0],c[0][1]);for(var j=1;j<c.length;j++)ctx.lineTo(c[j][0],c[j][1]);ctx.closePath();}
+    ctx.fill("evenodd");
+  }
+  // Flatten strokes into plain polylines for the matcher (wedge stamps carry .contours).
+  function strokePolys(list){var out=[];for(var i=0;i<list.length;i++){var st=list[i];if(st.contours)out=out.concat(st.contours);else out.push(st.pts||st);}return out;}
   function redraw(){
     ctx.fillStyle="#fffef9";ctx.fillRect(0,0,canvas.width,canvas.height);
     var all=strokes.concat(raw?[raw]:[]);
     for(var i=0;i<all.length;i++){
-      var st=all[i], pl=st.pts||st;
+      var st=all[i];
+      if(st.contours){fillContours(st.contours,"#1a1410");continue;}   // filled wedge glyph
+      var pl=st.pts||st;
       if(pl.length<1)continue;
-      if(st.fill){                                     // filled wedge shape
-        ctx.fillStyle="#1a1410";
-        ctx.beginPath();ctx.moveTo(pl[0][0],pl[0][1]);
-        for(var j=1;j<pl.length;j++)ctx.lineTo(pl[j][0],pl[j][1]);
-        ctx.closePath();ctx.fill();
-        continue;
-      }
       ctx.strokeStyle="#1a1410";ctx.lineWidth=6;ctx.lineCap="round";ctx.lineJoin="round";
       ctx.beginPath();ctx.moveTo(pl[0][0],pl[0][1]);
       for(var k=1;k<pl.length;k++)ctx.lineTo(pl[k][0],pl[k][1]);
@@ -256,9 +282,7 @@
   function previewWedge(){
     redraw();
     var wp=makeWedgePoly(wedgeKind,wedgeDrag.cx,wedgeDrag.cy,wedgeDrag.angle,wedgeDrag.size);
-    ctx.fillStyle="#8a6d3b";ctx.beginPath();ctx.moveTo(wp.pts[0][0],wp.pts[0][1]);
-    for(var i=1;i<wp.pts.length;i++)ctx.lineTo(wp.pts[i][0],wp.pts[i][1]);
-    ctx.closePath();ctx.fill();
+    fillContours(wp.contours,"#8a6d3b");
   }
   canvas.addEventListener("pointerdown",function(e){
     e.preventDefault();var p=pos(e);
@@ -284,18 +308,21 @@
   function search(){
     if(!REF.length){statusEl.textContent="Still loading…";return;}
     if(!strokes.length){resultsEl.innerHTML="";statusEl.textContent="Draw a sign to search.";return;}
-    var A=pointCloud(strokes);
+    var isAll=periodSel&&periodSel.value==="All periods";
+    var A=pointCloud(strokePolys(strokes));
     var scored=REF.map(function(r){return {r:r,d:chamfer(A,r.cloud)};});
     scored.sort(function(a,b){return a.d-b.d;});
-    var top=scored.slice(0,24);
+    var seen={},top=[];                       // one card per sign (best-matching form)
+    for(var si=0;si<scored.length&&top.length<24;si++){var cpk=scored[si].r.cp;if(seen[cpk])continue;seen[cpk]=1;top.push(scored[si]);}
     resultsEl.innerHTML="";
     for(var i=0;i<top.length;i++){
       var r=top[i].r, sim=Math.max(0,1-top[i].d);
       var nm=r.name||("U+"+r.cp);
       var rd=r.readings?r.readings.slice(0,4).join(", "):"";
       var ref=r.mzl?("MZL "+r.mzl):("U+"+r.cp);
+      var pd=(isAll&&r.period&&PABBR[r.period])?esc(PABBR[r.period])+" · ":"";
       var a=document.createElement("a");a.className="card";
-      a.title=nm+(rd?(" — "+r.readings.join(", ")):"")+(r.mzl?("  ·  MZL "+r.mzl):"")+(r.abz?("  ABZ "+r.abz):"");
+      a.title=nm+(rd?(" — "+r.readings.join(", ")):"")+(r.mzl?("  ·  MZL "+r.mzl):"")+(r.abz?("  ABZ "+r.abz):"")+(r.period?("  ["+r.period+"]"):"");
       // Prefer the exact eBL name that resolved during enrichment; otherwise fall back to
       // the eBL search (avoids dead sign-page links for signs eBL names differently).
       a.href = r.ebl
@@ -305,10 +332,10 @@
       a.innerHTML=signSVG(r.polys)+
         '<span class="nm">'+esc(nm)+'</span>'+
         (rd?'<span class="rd">'+esc(rd)+'</span>':'')+
-        '<span class="cp">'+esc(ref)+' · '+sim.toFixed(2)+'</span>';
+        '<span class="cp">'+pd+esc(ref)+' · '+sim.toFixed(2)+'</span>';
       resultsEl.appendChild(a);
     }
-    statusEl.textContent="Top "+top.length+" of "+REF.length+" signs.";
+    statusEl.textContent="Top "+top.length+" signs"+(isAll?" (all periods)":"");
   }
 
   // ---- ui -------------------------------------------------------------------
@@ -334,8 +361,8 @@
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
-    buildMeta();redraw();
-    selectPeriod(periodSel.value);   // loads the default period (Neo-Assyrian / Assurbanipal)
+    buildMeta();initStamps();redraw();
+    selectPeriod(periodSel.value);   // default = All periods
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
 })();
