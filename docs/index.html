@@ -52,8 +52,13 @@
   footer a{color:var(--accentd)}
   .card{cursor:pointer}
   /* sentence bar */
-  .sentbar{margin:0 22px 4px;padding:10px 14px;display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .sentbar{margin:0 22px 4px;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .sentbar-row{display:flex;align-items:center;gap:10px}
   .sentbar .grouplabel{width:auto;margin:0}
+  .sentgloss{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:.83rem;line-height:1.6}
+  .sentgloss a{color:var(--accentd);text-decoration:none}
+  .sentgloss a:hover{text-decoration:underline}
+  .gw{color:var(--muted)}
   .sentence{display:flex;gap:6px;overflow-x:auto;flex:1;min-height:56px;align-items:center;padding:4px 2px}
   .sent-empty{color:var(--muted);font-size:.82rem}
   .sent-slot{position:relative;flex:0 0 auto;width:58px;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:4px 4px 2px;text-align:center;cursor:pointer}
@@ -95,9 +100,12 @@
 </header>
 
 <section class="sentbar">
-  <span class="grouplabel">Sentence</span>
-  <div id="sentence" class="sentence"></div>
-  <button id="sentClear" class="tiny" title="Remove all signs from the sentence">clear</button>
+  <div class="sentbar-row">
+    <span class="grouplabel">Sentence</span>
+    <div id="sentence" class="sentence"></div>
+    <button id="sentClear" class="tiny" title="Remove all signs from the sentence">clear</button>
+  </div>
+  <div id="sentGloss" class="sentgloss" hidden></div>
 </section>
 
 <main>
@@ -127,8 +135,8 @@
   <section class="pane">
     <h2>Candidates</h2>
     <div class="period">
-      <label for="txtsearch">Find by name / reading:</label>
-      <input id="txtsearch" type="text" placeholder="e.g. gur2, lugal, an" autocomplete="off">
+      <label for="txtsearch">Find by name / reading / meaning:</label>
+      <input id="txtsearch" type="text" placeholder="e.g. gur2, lugal, or a meaning: king" autocomplete="off">
     </div>
     <div class="period">
       <label for="period">Period:</label>
@@ -181,6 +189,7 @@
 </div>
 
 <script src="js/signs-data.js"></script>
+<script src="js/words-data.js"></script>
 <script>
 "use strict";
 (function(){
@@ -188,6 +197,7 @@
   var canvas=document.getElementById("pad"), ctx=canvas.getContext("2d");
   // Canvas colors are drawn in JS, so they follow a theme object (CSS can't reach the canvas).
   var THEME={paper:"#fffef9", ink:"#1a1410", accent:"#8a6d3b"};
+  var WORDS=window.WORDS||{};   // lemmaId -> English guide-word (meaning), for search & glosses
 
   // ---- geometry: normalize polylines to a unit box, densify to a point cloud ----
   // Accepts either raw point arrays (reference contours) or {pts:[...]} stroke objects.
@@ -458,8 +468,9 @@
     for(var i=0;i<window.SIGNS.length;i++){
       var s=window.SIGNS[i], flipped=[];
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
-      var mt=META[s.cp]||{};
-      var entry={cp:s.cp,name:s.n||"",readings:mt.r||null,mzl:mt.m||"",abz:mt.z||"",ebl:mt.e||"",lg:mt.lg||null,compound:isCompound(s.n||"",mt.e||""),polys:flipped};
+      var mt=META[s.cp]||{}, lg=mt.lg||[], mean="", mset=[];
+      for(var q=0;q<lg.length;q++){var cl=cleanLemma(lg[q]).toLowerCase(), gw=(WORDS[lg[q]]||"").toLowerCase();mean+=" "+cl+" "+gw;if(cl)mset.push(cl);if(gw)mset.push(gw);}
+      var entry={cp:s.cp,name:s.n||"",readings:mt.r||null,mzl:mt.m||"",abz:mt.z||"",ebl:mt.e||"",lg:mt.lg||null,meanstr:mean,meanset:mset,compound:isCompound(s.n||"",mt.e||""),polys:flipped};
       SIGNLIST.push(entry);SIGNMAP[s.cp]=entry;
     }
   }
@@ -475,6 +486,8 @@
       else if(rr.some(function(x){return x.indexOf(q)===0;}))rs=3;
       else if(nml.indexOf(q)>=0)rs=4;
       else if(rr.some(function(x){return x.indexOf(q)>=0;}))rs=5;
+      else if(s.meanset&&s.meanset.indexOf(q)>=0)rs=6;    // exact word/meaning the sign writes (king -> LUGAL)
+      else if(s.meanstr&&s.meanstr.indexOf(q)>=0)rs=7;    // partial match in words/meanings
       if(rs<99)hits.push({s:s,rs:rs});
     }
     hits=hits.filter(function(h){return passMode(h.s.compound);});   // basal / compound / all
@@ -511,7 +524,7 @@
     var writes="";
     if(r.lg&&r.lg.length){
       writes='<div class="detail-writes"><span class="dl">Writes (words / combinations):</span> '+
-        r.lg.map(function(w){return '<a href="'+dictLink(w)+'" target="_blank" rel="noopener">'+esc(cleanLemma(w))+'</a>';}).join(", ")+'</div>';
+        r.lg.map(function(w){var gw=WORDS[w];return '<a href="'+dictLink(w)+'" target="_blank" rel="noopener">'+esc(cleanLemma(w))+'</a>'+(gw?' <span class="gw">('+esc(gw)+')</span>':'');}).join(", ")+'</div>';
     }
     openModal('<div class="detail">'+
       '<div class="detail-glyph">'+signSVG(r.polys)+'</div>'+
@@ -535,8 +548,12 @@
   function saveSentence(){try{localStorage.setItem("cm_sentence",JSON.stringify(sentence));}catch(e){}}
   function loadSentence(){try{var v=localStorage.getItem("cm_sentence");if(v)sentence=JSON.parse(v)||[];}catch(e){}}
   function addToSentence(r){if(sentence.length>=SENT_MAX)return;sentence.push(r.cp);saveSentence();renderSentence();}
+  var glossEl=document.getElementById("sentGloss");
   function renderSentence(){
-    if(!sentence.length){sentEl.innerHTML='<span class="sent-empty">Empty — open a candidate and “Add to sentence”. Signs stay here until removed.</span>';return;}
+    if(!sentence.length){
+      sentEl.innerHTML='<span class="sent-empty">Empty — open a candidate and “Add to sentence”. Signs stay here until removed.</span>';
+      glossEl.hidden=true;glossEl.innerHTML="";return;
+    }
     sentEl.innerHTML="";
     sentence.forEach(function(cp,i){
       var s=SIGNMAP[cp];if(!s)return;
@@ -548,6 +565,13 @@
       slot.onclick=function(){showDetail(SIGNMAP[cp]);};
       sentEl.appendChild(slot);
     });
+    // Logographic reading = the sign NAMES (their Sumerian values), joined ATF-style. We do NOT
+    // guess a single Akkadian meaning here — eBL's per-sign word list isn't ordered by frequency,
+    // so the words each sign writes live in its detail popup (and the meaning search).
+    var parts=[];
+    for(var g=0;g<sentence.length;g++){var s2=SIGNMAP[sentence[g]];if(s2)parts.push(esc(s2.name));}
+    glossEl.hidden=false;
+    glossEl.innerHTML='<span class="gw">Logographic reading (sign names): </span><b>'+parts.join(".")+'</b> <span class="gw">— click a sign for the Akkadian words it writes.</span>';
   }
 
   // ---- ui -------------------------------------------------------------------
