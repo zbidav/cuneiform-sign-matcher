@@ -48,6 +48,16 @@ def reading_str(v):
     return val + str(si) if isinstance(si, int) and si > 1 else val
 
 
+def logogram_words(d):
+    # Distinct dictionary lemmas this sign can write logographically (the words it stands for).
+    words = []
+    for lg in d.get("logograms", []) or []:
+        for w in lg.get("wordId", []) or []:
+            if w and w not in words:
+                words.append(w)
+    return words[:12]
+
+
 def op_score(rec):
     # How "compound" an eBL name is (count of combination operators). Lower = more basal.
     e = rec.get("ebl") or ""
@@ -74,7 +84,8 @@ def fetch_one(sign):
         lists = {l.get("name"): l.get("number") for l in d.get("lists", [])}
         readings = [r for r in (reading_str(v) for v in d.get("values", [])) if r]
         # `ebl` is the exact name string that resolved -> use it to build the sign-page link.
-        return cp, {"ebl": cand, "mzl": lists.get("MZL"), "abz": lists.get("ABZ"), "readings": readings}
+        return cp, {"ebl": cand, "mzl": lists.get("MZL"), "abz": lists.get("ABZ"),
+                    "readings": readings, "lg": logogram_words(d)}
     return cp, None
 
 
@@ -93,7 +104,8 @@ def fetch_mzl(n):
     for d in data if isinstance(data, list) else []:
         lists = {l.get("name"): l.get("number") for l in d.get("lists", [])}
         readings = [r for r in (reading_str(v) for v in d.get("values", [])) if r]
-        rec = {"ebl": d.get("name"), "mzl": lists.get("MZL"), "abz": lists.get("ABZ"), "readings": readings}
+        rec = {"ebl": d.get("name"), "mzl": lists.get("MZL"), "abz": lists.get("ABZ"),
+               "readings": readings, "lg": logogram_words(d)}
         # Only 1:1 signs claim a codepoint. A sequence like |ZI&ZI.A| (unicode=[ZI&ZI, A])
         # must NOT hijack the basal codepoints of its components (that mislinked "A" -> ZI&ZI.A).
         uni = d.get("unicode", [])
@@ -144,6 +156,8 @@ def main():
             s["z"] = m["abz"]
         if m.get("readings"):
             s["r"] = m["readings"][:40]
+        if m.get("lg"):
+            s["lg"] = m["lg"]
     payload = "window.SIGNS=" + json.dumps(signs, separators=(",", ":")) + ";\n"
     open(DATA, "w").write(payload)
     enriched = sum(1 for s in signs if "e" in s)

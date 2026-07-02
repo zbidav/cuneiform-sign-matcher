@@ -50,6 +50,38 @@
   .addbtn:hover{opacity:1;background:var(--accent);color:#fff;border-color:var(--accentd)}
   footer{display:flex;flex-wrap:wrap;gap:16px;padding:10px 22px 26px;color:var(--muted);font-size:.8rem}
   footer a{color:var(--accentd)}
+  .card{cursor:pointer}
+  /* sentence bar */
+  .sentbar{margin:0 22px 4px;padding:10px 14px;display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .sentbar .grouplabel{width:auto;margin:0}
+  .sentence{display:flex;gap:6px;overflow-x:auto;flex:1;min-height:56px;align-items:center;padding:4px 2px}
+  .sent-empty{color:var(--muted);font-size:.82rem}
+  .sent-slot{position:relative;flex:0 0 auto;width:58px;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:4px 4px 2px;text-align:center;cursor:pointer}
+  .sent-slot:hover{border-color:var(--accent)}
+  .sent-slot svg{width:100%;height:34px;display:block;color:var(--ink)}
+  .sent-slot .sent-nm{display:block;font-size:.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sent-x{position:absolute;top:-7px;right:-7px;width:18px;height:18px;line-height:1;padding:0;font-size:12px;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--accentd)}
+  .sent-x:hover{background:var(--accent);color:#fff}
+  .tiny{font-size:.75rem;padding:4px 9px}
+  /* detail modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+  .modal[hidden]{display:none}
+  .modal-box{position:relative;max-width:540px;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .modal-x{position:absolute;top:8px;right:10px;border:none;background:none;font-size:22px;line-height:1;color:var(--muted);padding:2px 6px;cursor:pointer}
+  .detail{display:flex;gap:18px;align-items:flex-start}
+  .detail-glyph{flex:0 0 auto;width:130px;height:130px;border:1px solid var(--line);border-radius:10px;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .detail-glyph svg{width:104px;height:104px}
+  .detail-info{flex:1;min-width:0}
+  .detail-name{font-size:1.3rem;font-weight:700}
+  .detail-meta{color:var(--muted);font-size:.82rem;margin:2px 0 8px}
+  .detail-rd,.detail-writes{font-size:.85rem;margin:6px 0;line-height:1.5}
+  .detail .dl{color:var(--muted)}
+  .detail-writes a{color:var(--accentd);text-decoration:none;margin-right:2px}
+  .detail-writes a:hover{text-decoration:underline}
+  .detail-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .detail-actions .btn,.detail-actions button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 12px;border-radius:8px;text-decoration:none;display:inline-block}
+  .detail-actions .btn:hover,.detail-actions button:hover{border-color:var(--accent)}
+  @media(max-width:520px){.detail{flex-direction:column}}
 </style>
 </head>
 <body>
@@ -61,6 +93,12 @@
   </div>
   <button id="darkToggle" title="Toggle dark mode">🌙 Dark</button>
 </header>
+
+<section class="sentbar">
+  <span class="grouplabel">Sentence</span>
+  <div id="sentence" class="sentence"></div>
+  <button id="sentClear" class="tiny" title="Remove all signs from the sentence">clear</button>
+</section>
 
 <main>
   <section class="pane">
@@ -125,7 +163,7 @@
       </select>
       <span class="note">basal = single signs · compound = built from others (×, +, ., &amp;)</span>
     </div>
-    <p class="hint">Ranked by shape similarity. Click a candidate to open its eBL sign page.</p>
+    <p class="hint">Ranked by shape similarity. Click a candidate to enlarge it — meanings, eBL links, and add to canvas or the sentence.</p>
     <div id="results" class="results"></div>
   </section>
 </main>
@@ -134,6 +172,13 @@
   <span>Period sign-forms derived from cuneiform fonts by S.&nbsp;Vanséveren (Assurbanipal, Santakku, SantakkuM, Ullikummi) &amp; C.&nbsp;Ziegeler (Esagil), as used by eBL.</span>
   <span><a href="https://www.ebl.lmu.de/tools/signs" target="_blank" rel="noopener">eBL sign list</a></span>
 </footer>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-box">
+    <button id="modalClose" class="modal-x" title="Close">×</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
 
 <script src="js/signs-data.js"></script>
 <script>
@@ -189,7 +234,7 @@
   var PABBR={"Neo-Assyrian":"NA","Old Babylonian":"OB","Middle Babylonian":"MB","Neo-Babylonian":"NB","Hittite":"Hit","Modern (Noto)":"Noto"};
   function loadAll(keys,cb){var i=0;(function nx(){if(i>=keys.length){cb();return;}ensureLoaded(PERIODS[keys[i]],function(){i++;nx();});})();}
   function buildMeta(){
-    for(var i=0;i<window.SIGNS.length;i++){var s=window.SIGNS[i];META[s.cp]={m:s.m||"",z:s.z||"",r:s.r||null,e:s.e||""};}
+    for(var i=0;i<window.SIGNS.length;i++){var s=window.SIGNS[i];META[s.cp]={m:s.m||"",z:s.z||"",r:s.r||null,e:s.e||"",lg:s.lg||null};}
   }
   function buildRefsFrom(arr,period){
     var out=[];
@@ -197,7 +242,7 @@
       var s=arr[i], flipped=[];
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
       var mt=META[s.cp]||{};
-      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,ebl:mt.e||"",period:period||"",compound:isCompound(s.n||"",mt.e||""),polys:flipped,cloud:pointCloud(flipped)});
+      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,ebl:mt.e||"",lg:mt.lg||null,period:period||"",compound:isCompound(s.n||"",mt.e||""),polys:flipped,cloud:pointCloud(flipped)});
     }
     return out;
   }
@@ -380,19 +425,14 @@
     var isAll=periodSel&&periodSel.value==="All periods";
     var pd=(sim!=null&&isAll&&r.period&&PABBR[r.period])?esc(PABBR[r.period])+" · ":"";
     var tail=(sim!=null)?(" · "+sim.toFixed(2)):"";
-    var a=document.createElement("a");a.className="card";
-    a.title=nm+(r.readings?(" — "+r.readings.join(", ")):"")+(r.mzl?("  ·  MZL "+r.mzl):"")+(r.abz?("  ABZ "+r.abz):"")+(r.period?("  ["+r.period+"]"):"");
-    a.href=r.ebl?"https://www.ebl.lmu.de/tools/signs/"+encodeURIComponent(r.ebl):"https://www.ebl.lmu.de/tools/signs";
-    a.target="_blank";a.rel="noopener";
-    a.innerHTML=signSVG(r.polys)+
+    var el=document.createElement("div");el.className="card";
+    el.title=nm+(r.readings?(" — "+r.readings.join(", ")):"");
+    el.innerHTML=signSVG(r.polys)+
       '<span class="nm">'+esc(nm)+'</span>'+
       (rd?'<span class="rd">'+esc(rd)+'</span>':'')+
       '<span class="cp">'+pd+esc(ref)+tail+'</span>';
-    var add=document.createElement("button");
-    add.className="addbtn";add.textContent="+";add.title="Add this sign onto the canvas";
-    add.onclick=function(ev){ev.preventDefault();ev.stopPropagation();addToCanvas(r.polys);};
-    a.appendChild(add);
-    return a;
+    el.onclick=function(){showDetail(r);};   // click enlarges: meanings, links, add-to actions
+    return el;
   }
 
   // ---- shape search (draw -> match by shape) --------------------------------
@@ -413,13 +453,14 @@
   }
 
   // ---- text search (by sign name or reading, e.g. "gur2") -------------------
-  var SIGNLIST=[];
+  var SIGNLIST=[], SIGNMAP={};
   function buildSignList(){
     for(var i=0;i<window.SIGNS.length;i++){
       var s=window.SIGNS[i], flipped=[];
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
       var mt=META[s.cp]||{};
-      SIGNLIST.push({cp:s.cp,name:s.n||"",readings:mt.r||null,mzl:mt.m||"",abz:mt.z||"",ebl:mt.e||"",compound:isCompound(s.n||"",mt.e||""),polys:flipped});
+      var entry={cp:s.cp,name:s.n||"",readings:mt.r||null,mzl:mt.m||"",abz:mt.z||"",ebl:mt.e||"",lg:mt.lg||null,compound:isCompound(s.n||"",mt.e||""),polys:flipped};
+      SIGNLIST.push(entry);SIGNMAP[s.cp]=entry;
     }
   }
   function textSearch(q){
@@ -455,6 +496,58 @@
     strokes.push({contours:cons,fill:true});
     if(txt)txt.value="";                       // switch back to shape mode with the sign placed
     redraw();search();
+  }
+
+  // ---- detail modal: enlarge a sign, show readings + meanings + eBL links, and actions ----
+  var modal=document.getElementById("modal"), modalBody=document.getElementById("modalBody");
+  function openModal(html){modalBody.innerHTML=html;modal.hidden=false;}
+  function closeModal(){modal.hidden=true;}
+  function cleanLemma(w){return w.replace(/\s+[IVX]+$/,"");}   // drop the homonym numeral for display
+  function dictLink(w){return "https://www.ebl.lmu.de/dictionary/"+encodeURIComponent(w);}
+  function signLink(r){return r.ebl?"https://www.ebl.lmu.de/tools/signs/"+encodeURIComponent(r.ebl):"https://www.ebl.lmu.de/tools/signs";}
+  function showDetail(r){
+    var rd=r.readings?r.readings.join(", "):"";
+    var meta="U+"+r.cp+(r.mzl?" · MZL "+r.mzl:"")+(r.abz?" · ABZ "+r.abz:"");
+    var writes="";
+    if(r.lg&&r.lg.length){
+      writes='<div class="detail-writes"><span class="dl">Writes (words / combinations):</span> '+
+        r.lg.map(function(w){return '<a href="'+dictLink(w)+'" target="_blank" rel="noopener">'+esc(cleanLemma(w))+'</a>';}).join(", ")+'</div>';
+    }
+    openModal('<div class="detail">'+
+      '<div class="detail-glyph">'+signSVG(r.polys)+'</div>'+
+      '<div class="detail-info">'+
+        '<div class="detail-name">'+esc(r.name||("U+"+r.cp))+'</div>'+
+        '<div class="detail-meta">'+esc(meta)+'</div>'+
+        (rd?'<div class="detail-rd"><span class="dl">Readings:</span> '+esc(rd)+'</div>':'')+
+        writes+
+        '<div class="detail-actions">'+
+          '<button data-act="canvas">🖊 Add to canvas</button>'+
+          '<button data-act="sentence">➕ Add to sentence</button>'+
+          '<a class="btn" href="'+signLink(r)+'" target="_blank" rel="noopener">🔗 eBL sign page</a>'+
+        '</div>'+
+      '</div></div>');
+    modalBody.querySelector('[data-act="canvas"]').onclick=function(){addToCanvas(r.polys);closeModal();};
+    modalBody.querySelector('[data-act="sentence"]').onclick=function(){addToSentence(r);closeModal();};
+  }
+
+  // ---- sentence: an ordered, persistent row of signs (up to 20), stored in localStorage ----
+  var sentence=[], SENT_MAX=20, sentEl=document.getElementById("sentence");
+  function saveSentence(){try{localStorage.setItem("cm_sentence",JSON.stringify(sentence));}catch(e){}}
+  function loadSentence(){try{var v=localStorage.getItem("cm_sentence");if(v)sentence=JSON.parse(v)||[];}catch(e){}}
+  function addToSentence(r){if(sentence.length>=SENT_MAX)return;sentence.push(r.cp);saveSentence();renderSentence();}
+  function renderSentence(){
+    if(!sentence.length){sentEl.innerHTML='<span class="sent-empty">Empty — open a candidate and “Add to sentence”. Signs stay here until removed.</span>';return;}
+    sentEl.innerHTML="";
+    sentence.forEach(function(cp,i){
+      var s=SIGNMAP[cp];if(!s)return;
+      var slot=document.createElement("div");slot.className="sent-slot";slot.title=s.name;
+      slot.innerHTML=signSVG(s.polys)+'<span class="sent-nm">'+esc(s.name)+'</span>';
+      var x=document.createElement("button");x.className="sent-x";x.textContent="×";x.title="remove";
+      x.onclick=function(ev){ev.stopPropagation();sentence.splice(i,1);saveSentence();renderSentence();};
+      slot.appendChild(x);
+      slot.onclick=function(){showDetail(SIGNMAP[cp]);};
+      sentEl.appendChild(slot);
+    });
   }
 
   // ---- ui -------------------------------------------------------------------
@@ -498,9 +591,14 @@
   var _sd=false;try{_sd=localStorage.getItem("cm_dark")==="1";}catch(e){}
   applyTheme(_sd);
 
+  document.getElementById("modalClose").onclick=closeModal;
+  modal.onclick=function(e){if(e.target===modal)closeModal();};
+  document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
+  document.getElementById("sentClear").onclick=function(){sentence=[];saveSentence();renderSentence();};
+
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
-    buildMeta();buildSignList();initStamps();redraw();
+    buildMeta();buildSignList();loadSentence();renderSentence();initStamps();redraw();
     selectPeriod(periodSel.value);   // default = All periods
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
