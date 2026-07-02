@@ -62,6 +62,27 @@ def fetch_one(sign):
     return cp, None
 
 
+def fetch_mzl(n):
+    # Query eBL by MZL number and map results back to Unicode codepoints via each sign's
+    # `unicode` field. Far more reliable than guessing name spellings: it uses eBL's own
+    # canonical name (usable directly in the sign-page URL) and codepoint.
+    url = "https://www.ebl.lmu.de/api/signs?listsName=MZL&listsNumber=%d" % n
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "cuneiform-matcher/1.0"})
+        with urllib.request.urlopen(req, timeout=12) as r:
+            data = json.load(r)
+    except Exception:
+        return []
+    recs = []
+    for d in data if isinstance(data, list) else []:
+        lists = {l.get("name"): l.get("number") for l in d.get("lists", [])}
+        readings = [v.get("value") for v in d.get("values", []) if v.get("value")]
+        rec = {"ebl": d.get("name"), "mzl": lists.get("MZL"), "abz": lists.get("ABZ"), "readings": readings}
+        for cp in d.get("unicode", []):
+            recs.append((format(int(cp), "X"), rec))
+    return recs
+
+
 def main():
     signs = load_signs()
     refresh = "--refresh" in sys.argv
@@ -70,16 +91,25 @@ def main():
         print(f"loaded {len(meta)} cached eBL records (use --refresh to re-fetch)")
     else:
         meta = {}
-        done = 0
+        # Pass 1: sweep MZL numbers, map to codepoints (authoritative, high coverage).
+        MAXMZL = 1000
         with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
-            for cp, m in ex.map(fetch_one, signs):
+            done = 0
+            for recs in ex.map(fetch_mzl, range(1, MAXMZL + 1)):
                 done += 1
+                for cp, rec in recs:
+                    meta.setdefault(cp, rec)
+                if done % 200 == 0:
+                    print(f"  MZL sweep {done}/{MAXMZL} (codepoints so far: {len(meta)})", flush=True)
+        print(f"MZL sweep done: {len(meta)} codepoints mapped")
+        # Pass 2: name-based fallback only for signs still missing.
+        missing = [s for s in signs if s["cp"] not in meta]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
+            for cp, m in ex.map(fetch_one, missing):
                 if m:
-                    meta[cp] = m
-                if done % 100 == 0:
-                    print(f"  fetched {done}/{len(signs)} (hits so far: {len(meta)})", flush=True)
+                    meta.setdefault(cp, m)
         json.dump(meta, open(CACHE, "w"))
-        print(f"fetched; {len(meta)} signs matched an eBL entry -> cached")
+        print(f"fetched; {len(meta)} codepoints have eBL data -> cached")
 
     for s in signs:
         m = meta.get(s["cp"])
