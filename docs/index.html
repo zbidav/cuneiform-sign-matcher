@@ -63,7 +63,8 @@
   .lines{display:flex;flex-direction:column;gap:5px}
   .sent-line{display:flex;align-items:center;gap:6px;padding:4px;border:1px solid transparent;border-radius:8px;cursor:pointer}
   .sent-line.active{border-color:var(--accent);background:var(--card)}
-  .line-num{flex:0 0 auto;width:20px;text-align:right;color:var(--muted);font-size:.72rem}
+  .sent-line.dragover{border-color:var(--accent);border-style:dashed;background:var(--card)}
+  .line-num{flex:0 0 auto;min-width:30px;text-align:right;color:var(--muted);font-size:.72rem;cursor:grab;user-select:none}
   .line-cells{display:flex;gap:6px;flex:1;flex-wrap:wrap;min-height:48px;align-items:center}
   .sent-empty{color:var(--muted);font-size:.8rem}
   .sent-slot{position:relative;flex:0 0 auto;width:58px;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:4px 4px 2px;text-align:center;cursor:grab}
@@ -564,7 +565,7 @@
 
   // ---- sentence workspace: up to 10 lines of signs (+ blank gaps); drag to reorder; persisted -
   // Each cell is {cp:"..."} for a sign or {b:1} for a blank/gap. New signs go to the active line.
-  var lines=[[]], MAXLINES=10, MAXPERLINE=48, activeLine=0, dragSrc=null;
+  var lines=[[]], MAXLINES=10, MAXPERLINE=48, activeLine=0, dragSrc=null, dragSrcLine=null;
   var linesEl=document.getElementById("lines"), glossEl=document.getElementById("sentGloss");
   function saveLines(){try{localStorage.setItem("cm_lines",JSON.stringify(lines));}catch(e){}}
   function loadLines(){
@@ -586,15 +587,27 @@
     if(fli===tli&&fci<tci)tci--;
     lines[tli].splice(tci,0,item);saveLines();renderSentence();
   }
+  function moveLine(fromLi,toLi){
+    if(fromLi===toLi)return;
+    var l=lines[fromLi];lines.splice(fromLi,1);
+    if(fromLi<toLi)toLi--;
+    lines.splice(toLi,0,l);activeLine=toLi;saveLines();renderSentence();
+  }
   function renderSentence(){
     linesEl.innerHTML="";
     lines.forEach(function(cells,li){
       var row=document.createElement("div");row.className="sent-line"+(li===activeLine?" active":"");
       row.onclick=function(){activeLine=li;renderSentence();};
-      var num=document.createElement("span");num.className="line-num";num.textContent=(li+1);row.appendChild(num);
+      row.ondragover=function(e){if(dragSrcLine!==null){e.preventDefault();row.classList.add("dragover");}};
+      row.ondragleave=function(){row.classList.remove("dragover");};
+      row.ondrop=function(e){if(dragSrcLine!==null){e.preventDefault();row.classList.remove("dragover");moveLine(dragSrcLine,li);dragSrcLine=null;}};
+      var num=document.createElement("span");num.className="line-num";num.textContent="⠿ "+(li+1);num.title="drag to reorder this line";num.draggable=true;
+      num.ondragstart=function(e){dragSrcLine=li;dragSrc=null;e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain","L");}catch(_){}};
+      num.ondragend=function(){dragSrcLine=null;};
+      row.appendChild(num);
       var cellsEl=document.createElement("div");cellsEl.className="line-cells";
-      cellsEl.ondragover=function(e){e.preventDefault();};
-      cellsEl.ondrop=function(e){e.preventDefault();if(dragSrc)moveCell(dragSrc.li,dragSrc.ci,li,cells.length);dragSrc=null;};
+      cellsEl.ondragover=function(e){if(dragSrc){e.preventDefault();}};
+      cellsEl.ondrop=function(e){if(dragSrc){e.preventDefault();e.stopPropagation();moveCell(dragSrc.li,dragSrc.ci,li,cells.length);dragSrc=null;}};
       if(!cells.length){var ph=document.createElement("span");ph.className="sent-empty";ph.textContent="(empty line — select it, then Add to sentence)";cellsEl.appendChild(ph);}
       cells.forEach(function(cell,ci){
         var slot=document.createElement("div");slot.className="sent-slot"+(cell.b?" blank":"");slot.draggable=!cell.b;
@@ -652,7 +665,10 @@
     for(var i=0;i<ws.length;i++)ws[i].classList.remove("active");btn.classList.add("active");
   };})(ws[w]);
   document.getElementById("undo").onclick=function(){strokes.pop();redraw();search();};
-  document.getElementById("clear").onclick=function(){strokes=[];if(txt)txt.value="";redraw();resultsEl.innerHTML="";statusEl.textContent="Draw a sign, or search by name.";};
+  document.getElementById("clear").onclick=function(){
+    if(strokes.length&&!window.confirm("Clear the canvas?"))return;
+    strokes=[];if(txt)txt.value="";redraw();resultsEl.innerHTML="";statusEl.textContent="Draw a sign, or search by name.";
+  };
   document.getElementById("search").onclick=search;
 
   // Period selector really switches the reference set (each period = its own font's forms).
@@ -682,7 +698,10 @@
   document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
   document.getElementById("addLine").onclick=addLine;
   document.getElementById("addBlank").onclick=addBlank;
-  document.getElementById("sentClear").onclick=function(){lines=[[]];activeLine=0;saveLines();renderSentence();};
+  document.getElementById("sentClear").onclick=function(){
+    if(lines.some(function(l){return l.length;})&&!window.confirm("Clear all lines of the sentence?"))return;
+    lines=[[]];activeLine=0;saveLines();renderSentence();
+  };
   document.getElementById("sentCopy").onclick=function(){
     var txt=lines.map(function(cells){return cells.map(function(cell){return cell.b?(cell.t||"…"):((SIGNMAP[cell.cp]&&SIGNMAP[cell.cp].name)||("U+"+cell.cp));}).join(".");}).filter(function(x){return x;}).join("\n");
     if(!txt)return;
