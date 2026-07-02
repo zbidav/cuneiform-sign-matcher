@@ -53,15 +53,22 @@
   .card{cursor:pointer}
   /* sentence bar */
   .sentbar{margin:0 22px 4px;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
-  .sentbar-row{display:flex;align-items:center;gap:10px}
+  .sentbar-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
   .sentbar .grouplabel{width:auto;margin:0}
   .sentgloss{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:.83rem;line-height:1.6}
   .sentgloss a{color:var(--accentd);text-decoration:none}
   .sentgloss a:hover{text-decoration:underline}
   .gw{color:var(--muted)}
-  .sentence{display:flex;gap:6px;overflow-x:auto;flex:1;min-height:56px;align-items:center;padding:4px 2px}
-  .sent-empty{color:var(--muted);font-size:.82rem}
-  .sent-slot{position:relative;flex:0 0 auto;width:58px;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:4px 4px 2px;text-align:center;cursor:pointer}
+  .lines{display:flex;flex-direction:column;gap:5px}
+  .sent-line{display:flex;align-items:center;gap:6px;padding:4px;border:1px solid transparent;border-radius:8px;cursor:pointer}
+  .sent-line.active{border-color:var(--accent);background:var(--card)}
+  .line-num{flex:0 0 auto;width:20px;text-align:right;color:var(--muted);font-size:.72rem}
+  .line-cells{display:flex;gap:6px;flex:1;flex-wrap:wrap;min-height:48px;align-items:center}
+  .sent-empty{color:var(--muted);font-size:.8rem}
+  .sent-slot{position:relative;flex:0 0 auto;width:58px;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:4px 4px 2px;text-align:center;cursor:grab}
+  .sent-slot.blank{width:36px;min-height:46px;display:flex;align-items:center;justify-content:center;border-style:dashed;color:var(--muted)}
+  .sent-slot.dragover{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+  .blankmark{font-size:1.3rem;line-height:1}
   .sent-slot:hover{border-color:var(--accent)}
   .sent-slot svg{width:100%;height:34px;display:block;color:var(--ink)}
   .sent-slot .sent-nm{display:block;font-size:.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -102,9 +109,12 @@
 <section class="sentbar">
   <div class="sentbar-row">
     <span class="grouplabel">Sentence</span>
-    <div id="sentence" class="sentence"></div>
-    <button id="sentClear" class="tiny" title="Remove all signs from the sentence">clear</button>
+    <button id="addLine" class="tiny" title="Add a line (up to 10)">＋ line</button>
+    <button id="addBlank" class="tiny" title="Add a blank / gap to the active line">␣ blank</button>
+    <button id="sentClear" class="tiny" title="Clear all lines">clear</button>
+    <span class="note">click a line to select it · drag signs to reorder · × removes</span>
   </div>
+  <div id="lines" class="lines"></div>
   <div id="sentGloss" class="sentgloss" hidden></div>
 </section>
 
@@ -548,35 +558,73 @@
     modalBody.querySelector('[data-act="sentence"]').onclick=function(){addToSentence(r);closeModal();};
   }
 
-  // ---- sentence: an ordered, persistent row of signs (up to 20), stored in localStorage ----
-  var sentence=[], SENT_MAX=20, sentEl=document.getElementById("sentence");
-  function saveSentence(){try{localStorage.setItem("cm_sentence",JSON.stringify(sentence));}catch(e){}}
-  function loadSentence(){try{var v=localStorage.getItem("cm_sentence");if(v)sentence=JSON.parse(v)||[];}catch(e){}}
-  function addToSentence(r){if(sentence.length>=SENT_MAX)return;sentence.push(r.cp);saveSentence();renderSentence();}
-  var glossEl=document.getElementById("sentGloss");
+  // ---- sentence workspace: up to 10 lines of signs (+ blank gaps); drag to reorder; persisted -
+  // Each cell is {cp:"..."} for a sign or {b:1} for a blank/gap. New signs go to the active line.
+  var lines=[[]], MAXLINES=10, MAXPERLINE=48, activeLine=0, dragSrc=null;
+  var linesEl=document.getElementById("lines"), glossEl=document.getElementById("sentGloss");
+  function saveLines(){try{localStorage.setItem("cm_lines",JSON.stringify(lines));}catch(e){}}
+  function loadLines(){
+    try{
+      var v=localStorage.getItem("cm_lines");
+      if(v)lines=JSON.parse(v);
+      else{var old=localStorage.getItem("cm_sentence");if(old){var a=JSON.parse(old)||[];lines=[a.map(function(cp){return {cp:cp};})];}}
+    }catch(e){}
+    if(!lines||!lines.length)lines=[[]];
+    if(activeLine>=lines.length)activeLine=lines.length-1;
+  }
+  function addToSentence(r){if(lines[activeLine].length<MAXPERLINE){lines[activeLine].push({cp:r.cp});saveLines();renderSentence();}}
+  function addBlank(){if(lines[activeLine].length<MAXPERLINE){lines[activeLine].push({b:1});saveLines();renderSentence();}}
+  function addLine(){if(lines.length<MAXLINES){lines.push([]);activeLine=lines.length-1;saveLines();renderSentence();}}
+  function removeLine(li){lines.splice(li,1);if(!lines.length)lines=[[]];if(activeLine>=lines.length)activeLine=lines.length-1;saveLines();renderSentence();}
+  function removeCell(li,ci){lines[li].splice(ci,1);saveLines();renderSentence();}
+  function moveCell(fli,fci,tli,tci){
+    var item=lines[fli][fci];lines[fli].splice(fci,1);
+    if(fli===tli&&fci<tci)tci--;
+    lines[tli].splice(tci,0,item);saveLines();renderSentence();
+  }
   function renderSentence(){
-    if(!sentence.length){
-      sentEl.innerHTML='<span class="sent-empty">Empty — open a candidate and “Add to sentence”. Signs stay here until removed.</span>';
-      glossEl.hidden=true;glossEl.innerHTML="";return;
-    }
-    sentEl.innerHTML="";
-    sentence.forEach(function(cp,i){
-      var s=SIGNMAP[cp];if(!s)return;
-      var slot=document.createElement("div");slot.className="sent-slot";slot.title=s.name;
-      slot.innerHTML=signSVG(s.polys)+'<span class="sent-nm">'+esc(s.name)+'</span>';
-      var x=document.createElement("button");x.className="sent-x";x.textContent="×";x.title="remove";
-      x.onclick=function(ev){ev.stopPropagation();sentence.splice(i,1);saveSentence();renderSentence();};
-      slot.appendChild(x);
-      slot.onclick=function(){showDetail(SIGNMAP[cp]);};
-      sentEl.appendChild(slot);
+    linesEl.innerHTML="";
+    lines.forEach(function(cells,li){
+      var row=document.createElement("div");row.className="sent-line"+(li===activeLine?" active":"");
+      row.onclick=function(){activeLine=li;renderSentence();};
+      var num=document.createElement("span");num.className="line-num";num.textContent=(li+1);row.appendChild(num);
+      var cellsEl=document.createElement("div");cellsEl.className="line-cells";
+      cellsEl.ondragover=function(e){e.preventDefault();};
+      cellsEl.ondrop=function(e){e.preventDefault();if(dragSrc)moveCell(dragSrc.li,dragSrc.ci,li,cells.length);dragSrc=null;};
+      if(!cells.length){var ph=document.createElement("span");ph.className="sent-empty";ph.textContent="(empty line — select it, then Add to sentence)";cellsEl.appendChild(ph);}
+      cells.forEach(function(cell,ci){
+        var slot=document.createElement("div");slot.className="sent-slot"+(cell.b?" blank":"");slot.draggable=true;
+        if(cell.b)slot.innerHTML='<span class="blankmark">␣</span>';
+        else{var s=SIGNMAP[cell.cp];slot.title=s?s.name:cell.cp;slot.innerHTML=(s?signSVG(s.polys):"")+'<span class="sent-nm">'+esc(s?s.name:("U+"+cell.cp))+'</span>';}
+        var x=document.createElement("button");x.className="sent-x";x.textContent="×";x.title="remove";
+        x.onclick=function(ev){ev.stopPropagation();removeCell(li,ci);};
+        slot.appendChild(x);
+        if(!cell.b)slot.onclick=function(ev){ev.stopPropagation();if(SIGNMAP[cell.cp])showDetail(SIGNMAP[cell.cp]);};
+        slot.ondragstart=function(e){dragSrc={li:li,ci:ci};e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain","x");}catch(_){}};
+        slot.ondragover=function(e){e.preventDefault();e.stopPropagation();slot.classList.add("dragover");};
+        slot.ondragleave=function(){slot.classList.remove("dragover");};
+        slot.ondrop=function(e){e.preventDefault();e.stopPropagation();slot.classList.remove("dragover");if(dragSrc)moveCell(dragSrc.li,dragSrc.ci,li,ci);dragSrc=null;};
+        cellsEl.appendChild(slot);
+      });
+      row.appendChild(cellsEl);
+      var del=document.createElement("button");del.className="tiny line-del";del.textContent="🗑";del.title="delete this line";
+      del.onclick=function(ev){ev.stopPropagation();removeLine(li);};
+      row.appendChild(del);
+      linesEl.appendChild(row);
     });
-    // Logographic reading = the sign NAMES (their Sumerian values), joined ATF-style. We do NOT
-    // guess a single Akkadian meaning here — eBL's per-sign word list isn't ordered by frequency,
-    // so the words each sign writes live in its detail popup (and the meaning search).
-    var parts=[];
-    for(var g=0;g<sentence.length;g++){var s2=SIGNMAP[sentence[g]];if(s2)parts.push(esc(s2.name));}
+    renderGloss();
+  }
+  function renderGloss(){
+    if(!lines.some(function(l){return l.length;})){glossEl.hidden=true;glossEl.innerHTML="";return;}
+    var out=lines.map(function(cells){
+      if(!cells.length)return null;
+      return cells.map(function(cell){
+        if(cell.b)return '<span class="gw">…</span>';
+        var s=SIGNMAP[cell.cp];return esc(s?s.name:("U+"+cell.cp));
+      }).join(".");
+    }).filter(function(x){return x;});
     glossEl.hidden=false;
-    glossEl.innerHTML='<span class="gw">Logographic reading (sign names): </span><b>'+parts.join(".")+'</b> <span class="gw">— click a sign for the Akkadian words it writes.</span>';
+    glossEl.innerHTML='<span class="gw">Logographic reading (sign names): </span><b>'+out.join("  /  ")+'</b>';
   }
 
   // ---- ui -------------------------------------------------------------------
@@ -623,11 +671,13 @@
   document.getElementById("modalClose").onclick=closeModal;
   modal.onclick=function(e){if(e.target===modal)closeModal();};
   document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
-  document.getElementById("sentClear").onclick=function(){sentence=[];saveSentence();renderSentence();};
+  document.getElementById("addLine").onclick=addLine;
+  document.getElementById("addBlank").onclick=addBlank;
+  document.getElementById("sentClear").onclick=function(){lines=[[]];activeLine=0;saveLines();renderSentence();};
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
-    buildMeta();buildSignList();loadSentence();renderSentence();initStamps();redraw();
+    buildMeta();buildSignList();loadLines();renderSentence();initStamps();redraw();
     selectPeriod(periodSel.value);   // default = All periods
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
