@@ -60,6 +60,8 @@
   .sentgloss a{color:var(--accentd);text-decoration:none}
   .sentgloss a:hover{text-decoration:underline}
   .gloss-line{margin:3px 0}
+  .sentgloss .fillsug{color:var(--accentd);cursor:pointer;border-bottom:1px dashed var(--accentd);text-decoration:none}
+  .sentgloss .fillsug:hover{background:var(--card)}
   .gw{color:var(--muted)}
   .lines{display:flex;flex-direction:column;gap:5px}
   .sent-line{display:flex;align-items:center;gap:6px;padding:4px;border:1px solid transparent;border-radius:8px;cursor:pointer}
@@ -671,6 +673,21 @@
     }
     return res;
   }
+  // token (a form's sign-name or reading) -> a sign codepoint, to fill a gap on click.
+  var TOK2CP={};
+  function buildTok2Cp(){
+    TOK2CP={};var i,s,rr,k;
+    for(i=0;i<window.SIGNS.length;i++){s=window.SIGNS[i];if(s.n){var nk=normTok(s.n);if(!TOK2CP[nk])TOK2CP[nk]=s.cp;}}
+    for(i=0;i<window.SIGNS.length;i++){s=window.SIGNS[i];rr=s.r||[];for(k=0;k<rr.length;k++){var rk=normTok(rr[k]);if(!TOK2CP[rk])TOK2CP[rk]=s.cp;}}
+  }
+  function applyCombo(li,toks){
+    if(!lines[li])return;var bi=0;
+    lines[li]=lines[li].map(function(cell){
+      if(cell.b){var cp=TOK2CP[toks[bi++]];return cp?{cp:cp}:cell;}
+      return cell;
+    });
+    saveLines();renderSentence();
+  }
   function renderGloss(){
     if(!lines.some(function(l){return l.length;})){glossEl.hidden=true;glossEl.innerHTML="";return;}
     var html="";
@@ -687,6 +704,8 @@
           var hasBlank=cells.some(function(c){return c.b;});
           extra=' <span class="gw">'+(hasBlank?"could be":"=")+'</span> '+mm.slice(0,4).map(function(x){
             var lab=esc(x.form)+' <span class="gw">('+esc(x.akk)+(x.fill.length?"; gap: "+esc(x.fill.join(", ")):"")+')</span>';
+            if(x.fill.length)   // clickable: fill the gap(s) with the suggested sign(s)
+              return '<a href="#" class="fillsug" data-li="'+li+'" data-fill="'+esc(x.fill.join(","))+'" title="click to fill the gap with '+esc(x.fill.join(", "))+'">'+lab+'</a>';
             return '<a href="https://www.ebl.lmu.de/tools/signs/'+encodeURIComponent(x.form)+'" target="_blank" rel="noopener">'+lab+'</a>';
           }).join(' <span class="gw"> · </span> ');
         }
@@ -744,6 +763,10 @@
   document.getElementById("modalClose").onclick=closeModal;
   modal.onclick=function(e){if(e.target===modal)closeModal();};
   document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
+  glossEl.addEventListener("click",function(e){
+    var a=e.target.closest?e.target.closest(".fillsug"):null;
+    if(a){e.preventDefault();applyCombo(parseInt(a.getAttribute("data-li"),10),(a.getAttribute("data-fill")||"").split(","));}
+  });
   document.getElementById("addLine").onclick=addLine;
   document.getElementById("addBlank").onclick=addBlank;
   document.getElementById("sentClear").onclick=function(){
@@ -760,7 +783,7 @@
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
-    buildMeta();buildSignList();buildCombos();loadLines();renderSentence();initStamps();redraw();
+    buildMeta();buildSignList();buildCombos();buildTok2Cp();loadLines();renderSentence();initStamps();redraw();
     selectPeriod(periodSel.value);   // default = All periods
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
