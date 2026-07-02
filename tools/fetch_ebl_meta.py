@@ -48,6 +48,12 @@ def reading_str(v):
     return val + str(si) if isinstance(si, int) and si > 1 else val
 
 
+def op_score(rec):
+    # How "compound" an eBL name is (count of combination operators). Lower = more basal.
+    e = rec.get("ebl") or ""
+    return sum(e.count(c) for c in "×+&.·()")
+
+
 def load_signs():
     txt = open(DATA).read()
     return json.loads(txt[len("window.SIGNS="):-2])
@@ -111,7 +117,9 @@ def main():
             for recs in ex.map(fetch_mzl, range(1, MAXMZL + 1)):
                 done += 1
                 for cp, rec in recs:
-                    meta.setdefault(cp, rec)
+                    cur = meta.get(cp)                    # prefer the most basal name per codepoint
+                    if cur is None or op_score(rec) < op_score(cur):
+                        meta[cp] = rec
                 if done % 200 == 0:
                     print(f"  MZL sweep {done}/{MAXMZL} (codepoints so far: {len(meta)})", flush=True)
         print(f"MZL sweep done: {len(meta)} codepoints mapped")

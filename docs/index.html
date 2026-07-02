@@ -46,7 +46,7 @@
   .card .nm{display:block;max-width:100%;font-size:.74rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .card .rd{display:block;max-width:100%;font-size:.66rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .card .cp{display:block;font-size:.66rem;color:var(--muted)}
-  .addbtn{position:absolute;top:3px;right:3px;width:20px;height:20px;line-height:1;padding:0;font-size:14px;border-radius:6px;background:var(--card);color:var(--accentd);border:1px solid var(--line);opacity:.55}
+  .addbtn{position:absolute;top:4px;right:4px;width:28px;height:28px;line-height:1;padding:0;font-size:20px;font-weight:600;border-radius:7px;background:var(--card);color:var(--accentd);border:1px solid var(--line);opacity:.65}
   .addbtn:hover{opacity:1;background:var(--accent);color:#fff;border-color:var(--accentd)}
   footer{display:flex;flex-wrap:wrap;gap:16px;padding:10px 22px 26px;color:var(--muted);font-size:.8rem}
   footer a{color:var(--accentd)}
@@ -114,6 +114,15 @@
         <option value="99999">All</option>
       </select>
       <span class="note">results per search</span>
+    </div>
+    <div class="period">
+      <label for="signmode">Signs:</label>
+      <select id="signmode">
+        <option value="all" selected>All</option>
+        <option value="basal">Basal only</option>
+        <option value="compound">Compound only</option>
+      </select>
+      <span class="note">basal = single signs · compound = built from others (×, +, ., &amp;)</span>
     </div>
     <p class="hint">Ranked by shape similarity. Click a candidate to open its eBL sign page.</p>
     <div id="results" class="results"></div>
@@ -187,7 +196,7 @@
       var s=arr[i], flipped=[];
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
       var mt=META[s.cp]||{};
-      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,ebl:mt.e||"",period:period||"",polys:flipped,cloud:pointCloud(flipped)});
+      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,ebl:mt.e||"",period:period||"",compound:isCompound(s.n||"",mt.e||""),polys:flipped,cloud:pointCloud(flipped)});
     }
     return out;
   }
@@ -234,6 +243,17 @@
   // Unicode sign name -> eBL sign-list name (e.g. "KA TIMES BAD" -> "KA×BAD").
   function eblName(n){return n.replace(/ TIMES /g,"×").replace(/ PLUS /g,"+");}
   function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+  // Compound = a sign built from others. Either signal marks it: the eBL name has a
+  // combination operator (× + . &), or the Unicode name spells out a composition
+  // (TIMES/PLUS/OVER/CROSSING/OPPOSING/SQUARED). Modifications (GUNU, TENU, …) stay basal.
+  function isCompound(name,ebl){
+    if(/[×+.&]/.test(ebl||""))return true;
+    return /\b(TIMES|PLUS|OVER|CROSSING|OPPOSING|SQUARED)\b/.test(name||"");
+  }
+  function passMode(compound){
+    var m=signMode?signMode.value:"all";
+    return m==="all"||(m==="basal"&&!compound)||(m==="compound"&&compound);
+  }
 
   // ---- drawing surface ------------------------------------------------------
   // strokes: array of {pts:[[x,y],...], kind:null|'vertical'|'horizontal'|'diagonal'|'winkelhaken'}
@@ -362,8 +382,8 @@
     var A=pointCloud(strokePolys(strokes));
     var scored=REF.map(function(r){return {r:r,d:chamfer(A,r.cloud)};});
     scored.sort(function(a,b){return a.d-b.d;});
-    var seen={},top=[];                       // one card per sign (best-matching form)
-    for(var si=0;si<scored.length&&top.length<N;si++){var cpk=scored[si].r.cp;if(seen[cpk])continue;seen[cpk]=1;top.push(scored[si]);}
+    var seen={},top=[];                       // one card per sign (best-matching form), mode-filtered
+    for(var si=0;si<scored.length&&top.length<N;si++){var r0=scored[si].r;if(!passMode(r0.compound)||seen[r0.cp])continue;seen[r0.cp]=1;top.push(scored[si]);}
     resultsEl.innerHTML="";
     for(var i=0;i<top.length;i++)resultsEl.appendChild(makeCard(top[i].r,Math.max(0,1-top[i].d)));
     statusEl.textContent="Top "+top.length+" signs"+(isAll?" (all periods)":"");
@@ -376,7 +396,7 @@
       var s=window.SIGNS[i], flipped=[];
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
       var mt=META[s.cp]||{};
-      SIGNLIST.push({cp:s.cp,name:s.n||"",readings:mt.r||null,mzl:mt.m||"",abz:mt.z||"",ebl:mt.e||"",polys:flipped});
+      SIGNLIST.push({cp:s.cp,name:s.n||"",readings:mt.r||null,mzl:mt.m||"",abz:mt.z||"",ebl:mt.e||"",compound:isCompound(s.n||"",mt.e||""),polys:flipped});
     }
   }
   function textSearch(q){
@@ -393,6 +413,7 @@
       else if(rr.some(function(x){return x.indexOf(q)>=0;}))rs=5;
       if(rs<99)hits.push({s:s,rs:rs});
     }
+    hits=hits.filter(function(h){return passMode(h.s.compound);});   // basal / compound / all
     hits.sort(function(a,b){return a.rs-b.rs;});
     var N=parseInt(topnSel.value,10)||24;
     resultsEl.innerHTML="";
@@ -435,6 +456,8 @@
   periodSel.onchange=function(){selectPeriod(periodSel.value);};
   var topnSel=document.getElementById("topn");
   topnSel.onchange=function(){search();};
+  var signMode=document.getElementById("signmode");
+  signMode.onchange=function(){search();};
   var txt=document.getElementById("txtsearch");
   txt.oninput=function(){textSearch(txt.value);};
 
