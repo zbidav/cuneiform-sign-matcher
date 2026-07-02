@@ -330,7 +330,7 @@
     for(var i=0;i<top.length;i++){
       var r=top[i].r, sim=Math.max(0,1-top[i].d);
       var nm=r.name||("U+"+r.cp);
-      var rd=r.readings?r.readings.slice(0,4).join(", "):"";
+      var rd=r.readings?r.readings.slice(0,8).join(", "):"";
       var ref=r.mzl?("MZL "+r.mzl):("U+"+r.cp);
       var pd=(isAll&&r.period&&PABBR[r.period])?esc(PABBR[r.period])+" · ":"";
       var a=document.createElement("a");a.className="card";

@@ -122,7 +122,7 @@ def main():
         if m.get("abz"):
             s["z"] = m["abz"]
         if m.get("readings"):
-            s["r"] = m["readings"][:6]
+            s["r"] = m["readings"][:40]
     payload = "window.SIGNS=" + json.dumps(signs, separators=(",", ":")) + ";\n"
     open(DATA, "w").write(payload)
     enriched = sum(1 for s in signs if "e" in s)
