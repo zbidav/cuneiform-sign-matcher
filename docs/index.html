@@ -546,7 +546,7 @@
     var combos="";
     if(r.cb&&r.cb.length){
       combos='<div class="detail-writes"><span class="dl">Combinations (writings it appears in):</span> '+
-        r.cb.map(function(c){return '<a href="https://www.ebl.lmu.de/tools/signs/'+encodeURIComponent(c[0])+'" target="_blank" rel="noopener">'+esc(c[0])+'</a> <span class="gw">('+esc(c[1])+')</span>';}).join(", ")+'</div>';
+        r.cb.map(function(c){return '<b>'+esc(c[0])+'</b> '+comboMeaningHtml(c[1]);}).join(", ")+'</div>';
     }
     openModal('<div class="detail">'+
       '<div class="detail-glyph">'+signSVG(r.polys)+'</div>'+
@@ -679,6 +679,21 @@
     for(i=0;i<window.SIGNS.length;i++){s=window.SIGNS[i];if(s.n){var nk=normTok(s.n);if(!TOK2CP[nk])TOK2CP[nk]=s.cp;}}
     for(i=0;i<window.SIGNS.length;i++){s=window.SIGNS[i];rr=s.r||[];for(k=0;k<rr.length;k++){var rk=normTok(rr[k]);if(!TOK2CP[rk])TOK2CP[rk]=s.cp;}}
   }
+  // A combination's Akkadian reading -> its eBL dictionary word id, so we can link the MEANING.
+  // (The combination FORM like TIN.TIR is a writing, not a sign, so it has no sign page.)
+  var WORD2ID={};
+  // Normalize a word for matching: drop homonym numeral, parentheticals, and diacritics
+  // (macrons/carons/dots), so the combination reading "Bābilu" matches the lemma "Babilu I".
+  function normWord(x){return cleanLemma(String(x)).replace(/\s*\([^)]*\)/g,"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();}
+  function buildWord2Id(){
+    WORD2ID={};
+    for(var k in WORDS){if(!WORDS.hasOwnProperty(k))continue;var nk=normWord(k);if(nk&&!WORD2ID[nk])WORD2ID[nk]=k;}
+  }
+  function comboMeaningHtml(akk){   // "(akk)" — akk linked to the dictionary when it resolves
+    var id=WORD2ID[normWord(akk)];
+    return id?('(<a href="'+dictLink(id)+'" target="_blank" rel="noopener">'+esc(akk)+'</a>)')
+             :('<span class="gw">('+esc(akk)+')</span>');
+  }
   function applyCombo(li,toks){
     if(!lines[li])return;var bi=0;
     lines[li]=lines[li].map(function(cell){
@@ -702,10 +717,11 @@
         if(mm.length){
           var hasBlank=cells.some(function(c){return c.b;});
           extra=' <span class="gw">'+(hasBlank?"could be":"=")+'</span> '+mm.slice(0,4).map(function(x){
-            var lab=esc(x.form)+' <span class="gw">('+esc(x.akk)+(x.fill.length?"; gap: "+esc(x.fill.join(", ")):"")+')</span>';
-            if(x.fill.length)   // clickable: fill the gap(s) with the suggested sign(s)
+            if(x.fill.length){   // clickable: fill the gap(s) with the suggested sign(s)
+              var lab=esc(x.form)+' <span class="gw">('+esc(x.akk)+"; gap: "+esc(x.fill.join(", "))+')</span>';
               return '<a href="#" class="fillsug" data-li="'+li+'" data-fill="'+esc(x.fill.join(","))+'" title="click to fill the gap with '+esc(x.fill.join(", "))+'">'+lab+'</a>';
-            return '<a href="https://www.ebl.lmu.de/tools/signs/'+encodeURIComponent(x.form)+'" target="_blank" rel="noopener">'+lab+'</a>';
+            }
+            return '<b>'+esc(x.form)+'</b> '+comboMeaningHtml(x.akk);   // exact match: form as text, meaning -> dictionary
           }).join(' <span class="gw"> · </span> ');
         }
       }
@@ -782,7 +798,7 @@
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
-    buildMeta();buildSignList();buildCombos();buildTok2Cp();loadLines();renderSentence();initStamps();redraw();
+    buildMeta();buildSignList();buildCombos();buildTok2Cp();buildWord2Id();loadLines();renderSentence();initStamps();redraw();
     selectPeriod(periodSel.value);   // default = All periods
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
