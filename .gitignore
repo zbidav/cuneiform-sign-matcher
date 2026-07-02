@@ -1,0 +1,23 @@
+# Copyrighted reference material — never publish
+*.pdf
+
+# Python (Track B — future embedding model)
+model/.venv/
+__pycache__/
+*.pyc
+model/data/
+model/checkpoints/
+*.pth
+*.onnx
+
+# Local scratch / verification artifacts
+docs/_demo.html
+docs/_shot.png
+*.swp
+.DS_Store
+
+# NOTE: docs/fonts/NotoSansCuneiform-Regular.ttf IS committed on purpose (OFL-licensed):
+# it is the provenance of docs/js/signs-data.js and lets the vector data be regenerated.
+
+# NFS temp artifacts
+.nfs*
