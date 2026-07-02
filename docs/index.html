@@ -66,9 +66,11 @@
   .line-cells{display:flex;gap:6px;flex:1;flex-wrap:wrap;min-height:48px;align-items:center}
   .sent-empty{color:var(--muted);font-size:.8rem}
   .sent-slot{position:relative;flex:0 0 auto;width:58px;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:4px 4px 2px;text-align:center;cursor:grab}
-  .sent-slot.blank{width:36px;min-height:46px;display:flex;align-items:center;justify-content:center;border-style:dashed;color:var(--muted)}
+  .sent-slot.blank{width:66px;min-height:46px;display:flex;align-items:center;justify-content:center;border-style:dashed;color:var(--muted)}
   .sent-slot.dragover{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
-  .blankmark{font-size:1.3rem;line-height:1}
+  .blank-in{width:56px;border:none;background:transparent;color:var(--ink);font:inherit;font-size:.72rem;text-align:center;padding:0}
+  .blank-in:focus{outline:none}
+  .blank-in::placeholder{color:var(--muted)}
   .sent-slot:hover{border-color:var(--accent)}
   .sent-slot svg{width:100%;height:34px;display:block;color:var(--ink)}
   .sent-slot .sent-nm{display:block;font-size:.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -110,9 +112,10 @@
   <div class="sentbar-row">
     <span class="grouplabel">Sentence</span>
     <button id="addLine" class="tiny" title="Add a line (up to 10)">＋ line</button>
-    <button id="addBlank" class="tiny" title="Add a blank / gap to the active line">␣ blank</button>
+    <button id="addBlank" class="tiny" title="Add a blank / gap to the active line — you can type a note in it">␣ blank</button>
+    <button id="sentCopy" class="tiny" title="Copy the transcription (sign names + notes), line by line">⧉ copy</button>
     <button id="sentClear" class="tiny" title="Clear all lines">clear</button>
-    <span class="note">click a line to select it · drag signs to reorder · × removes</span>
+    <span class="note">click a line to select it · drag signs to reorder · type in a blank · × removes</span>
   </div>
   <div id="lines" class="lines"></div>
   <div id="sentGloss" class="sentgloss" hidden></div>
@@ -573,7 +576,7 @@
     if(activeLine>=lines.length)activeLine=lines.length-1;
   }
   function addToSentence(r){if(lines[activeLine].length<MAXPERLINE){lines[activeLine].push({cp:r.cp});saveLines();renderSentence();}}
-  function addBlank(){if(lines[activeLine].length<MAXPERLINE){lines[activeLine].push({b:1});saveLines();renderSentence();}}
+  function addBlank(){if(lines[activeLine].length<MAXPERLINE){lines[activeLine].push({b:1,t:""});saveLines();renderSentence();}}
   function addLine(){if(lines.length<MAXLINES){lines.push([]);activeLine=lines.length-1;saveLines();renderSentence();}}
   function removeLine(li){lines.splice(li,1);if(!lines.length)lines=[[]];if(activeLine>=lines.length)activeLine=lines.length-1;saveLines();renderSentence();}
   function removeCell(li,ci){lines[li].splice(ci,1);saveLines();renderSentence();}
@@ -593,9 +596,14 @@
       cellsEl.ondrop=function(e){e.preventDefault();if(dragSrc)moveCell(dragSrc.li,dragSrc.ci,li,cells.length);dragSrc=null;};
       if(!cells.length){var ph=document.createElement("span");ph.className="sent-empty";ph.textContent="(empty line — select it, then Add to sentence)";cellsEl.appendChild(ph);}
       cells.forEach(function(cell,ci){
-        var slot=document.createElement("div");slot.className="sent-slot"+(cell.b?" blank":"");slot.draggable=true;
-        if(cell.b)slot.innerHTML='<span class="blankmark">␣</span>';
-        else{var s=SIGNMAP[cell.cp];slot.title=s?s.name:cell.cp;slot.innerHTML=(s?signSVG(s.polys):"")+'<span class="sent-nm">'+esc(s?s.name:("U+"+cell.cp))+'</span>';}
+        var slot=document.createElement("div");slot.className="sent-slot"+(cell.b?" blank":"");slot.draggable=!cell.b;
+        if(cell.b){
+          var inp=document.createElement("input");inp.className="blank-in";inp.value=cell.t||"";inp.placeholder="…";inp.title="type a transliteration / note";
+          inp.onclick=function(ev){ev.stopPropagation();};
+          inp.oninput=function(){cell.t=inp.value;saveLines();};
+          inp.onblur=function(){renderGloss();};
+          slot.appendChild(inp);
+        }else{var s=SIGNMAP[cell.cp];slot.title=s?s.name:cell.cp;slot.innerHTML=(s?signSVG(s.polys):"")+'<span class="sent-nm">'+esc(s?s.name:("U+"+cell.cp))+'</span>';}
         var x=document.createElement("button");x.className="sent-x";x.textContent="×";x.title="remove";
         x.onclick=function(ev){ev.stopPropagation();removeCell(li,ci);};
         slot.appendChild(x);
@@ -619,7 +627,7 @@
     var out=lines.map(function(cells){
       if(!cells.length)return null;
       return cells.map(function(cell){
-        if(cell.b)return '<span class="gw">…</span>';
+        if(cell.b)return '<span class="gw">'+(cell.t?esc(cell.t):"…")+'</span>';
         var s=SIGNMAP[cell.cp];return esc(s?s.name:("U+"+cell.cp));
       }).join(".");
     }).filter(function(x){return x;});
@@ -674,6 +682,13 @@
   document.getElementById("addLine").onclick=addLine;
   document.getElementById("addBlank").onclick=addBlank;
   document.getElementById("sentClear").onclick=function(){lines=[[]];activeLine=0;saveLines();renderSentence();};
+  document.getElementById("sentCopy").onclick=function(){
+    var txt=lines.map(function(cells){return cells.map(function(cell){return cell.b?(cell.t||"…"):((SIGNMAP[cell.cp]&&SIGNMAP[cell.cp].name)||("U+"+cell.cp));}).join(".");}).filter(function(x){return x;}).join("\n");
+    if(!txt)return;
+    function ok(){var b=document.getElementById("sentCopy"),o=b.textContent;b.textContent="copied!";setTimeout(function(){b.textContent=o;},1200);}
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(ok,function(){window.prompt("Copy the transcription:",txt);});
+    else window.prompt("Copy the transcription:",txt);
+  };
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
