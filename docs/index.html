@@ -323,11 +323,11 @@
       var pd=(isAll&&r.period&&PABBR[r.period])?esc(PABBR[r.period])+" · ":"";
       var a=document.createElement("a");a.className="card";
       a.title=nm+(rd?(" — "+r.readings.join(", ")):"")+(r.mzl?("  ·  MZL "+r.mzl):"")+(r.abz?("  ABZ "+r.abz):"")+(r.period?("  ["+r.period+"]"):"");
-      // Prefer the exact eBL name that resolved during enrichment; otherwise fall back to
-      // the eBL search (avoids dead sign-page links for signs eBL names differently).
+      // Link to the verified eBL sign page (r.ebl was confirmed to resolve). Signs with no
+      // eBL match go to the clean sign-search page — never ?query= (eBL rejects that param).
       a.href = r.ebl
         ? "https://www.ebl.lmu.de/tools/signs/"+encodeURIComponent(r.ebl)
-        : "https://www.ebl.lmu.de/tools/signs?query="+encodeURIComponent(eblName(r.name||r.c));
+        : "https://www.ebl.lmu.de/tools/signs";
       a.target="_blank";a.rel="noopener";
       a.innerHTML=signSVG(r.polys)+
         '<span class="nm">'+esc(nm)+'</span>'+
