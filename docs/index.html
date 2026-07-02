@@ -86,11 +86,12 @@
     <div class="period">
       <label for="period">Period:</label>
       <select id="period">
-        <option value="Neo-Assyrian" selected>Neo-Assyrian</option>
-        <option value="Old Babylonian">Old Babylonian</option>
-        <option value="Neo/Late Babylonian">Neo/Late Babylonian</option>
-        <option value="Old Assyrian">Old Assyrian</option>
-        <option value="Any">Any period</option>
+        <option value="Neo-Assyrian" selected>Neo-Assyrian (Assurbanipal)</option>
+        <option value="Old Babylonian">Old Babylonian (Santakku)</option>
+        <option value="Middle Babylonian">Middle Babylonian (SantakkuM)</option>
+        <option value="Neo-Babylonian">Neo-Babylonian (Esagil)</option>
+        <option value="Hittite">Hittite (Ullikummi)</option>
+        <option value="Modern (Noto)">Modern (Noto Sans)</option>
       </select>
       <span class="note" id="periodMsg"></span>
     </div>
@@ -100,7 +101,7 @@
 </main>
 
 <footer>
-  <span>Reference set: Unicode Cuneiform block, 879 signs.</span>
+  <span>Period sign-forms derived from cuneiform fonts by S.&nbsp;Vanséveren (Assurbanipal, Santakku, SantakkuM, Ullikummi) &amp; C.&nbsp;Ziegeler (Esagil), as used by eBL.</span>
   <span><a href="https://www.ebl.lmu.de/tools/signs" target="_blank" rel="noopener">eBL sign list</a></span>
 </footer>
 
@@ -139,13 +140,51 @@
   }
 
   // ---- reference set (flip font y-up to screen y-down; precompute cloud + display) ----
-  var REF=[];
-  function buildRefs(){
-    for(var i=0;i<window.SIGNS.length;i++){
-      var s=window.SIGNS[i], flipped=[];
+  // Each period is a separate reference set generated from a period-specific cuneiform font
+  // (eBL's fonts). Datasets are lazy-loaded on demand. MZL/ABZ/readings are period-independent
+  // and joined from the base (Noto) data by codepoint.
+  var REF=[], META={}, REFCACHE={};
+  var PERIODS={
+    "Neo-Assyrian":     {v:"SIGNS_NA", f:"js/signs-na.js",  font:"Assurbanipal"},
+    "Old Babylonian":   {v:"SIGNS_OB", f:"js/signs-ob.js",  font:"Santakku"},
+    "Middle Babylonian":{v:"SIGNS_MB", f:"js/signs-mb.js",  font:"SantakkuM"},
+    "Neo-Babylonian":   {v:"SIGNS_NB", f:"js/signs-nb.js",  font:"Esagil"},
+    "Hittite":          {v:"SIGNS_HIT",f:"js/signs-hit.js", font:"Ullikummi"},
+    "Modern (Noto)":    {v:"SIGNS",    f:null,              font:"Noto Sans Cuneiform"}
+  };
+  function buildMeta(){
+    for(var i=0;i<window.SIGNS.length;i++){var s=window.SIGNS[i];META[s.cp]={m:s.m||"",z:s.z||"",r:s.r||null};}
+  }
+  function buildRefsFrom(arr){
+    var out=[];
+    for(var i=0;i<arr.length;i++){
+      var s=arr[i], flipped=[];
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
-      REF.push({c:s.c,cp:s.cp,name:s.n||"",mzl:s.m||"",abz:s.z||"",readings:s.r||null,polys:flipped,cloud:pointCloud(flipped)});
+      var mt=META[s.cp]||{};
+      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,polys:flipped,cloud:pointCloud(flipped)});
     }
+    return out;
+  }
+  function ensureLoaded(cfg,cb){
+    if(window[cfg.v]){cb();return;}
+    var sc=document.createElement("script");sc.src=cfg.f;
+    sc.onload=function(){cb();};sc.onerror=function(){cb(new Error("load"));};
+    document.body.appendChild(sc);
+  }
+  function selectPeriod(label){
+    var cfg=PERIODS[label]; if(!cfg)return;
+    if(REFCACHE[label]){REF=REFCACHE[label];afterPeriod(label);return;}
+    statusEl.textContent="Loading "+label+" forms…";
+    ensureLoaded(cfg,function(err){
+      if(err||!window[cfg.v]){periodMsg.style.color="#8a2c22";periodMsg.textContent="Could not load "+label+" forms.";return;}
+      REF=buildRefsFrom(window[cfg.v]);REFCACHE[label]=REF;afterPeriod(label);
+    });
+  }
+  function afterPeriod(label){
+    var cfg=PERIODS[label];
+    periodMsg.style.color="#8b8272";
+    periodMsg.textContent=cfg.font+" — "+REF.length+" sign forms"+(REF.length<879?" (this script covers a subset)":"");
+    redraw();search();
   }
   function signSVG(polys){
     var minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9,i,j,pl;
@@ -272,25 +311,14 @@
   document.getElementById("clear").onclick=function(){strokes=[];redraw();resultsEl.innerHTML="";statusEl.textContent="Draw a sign to search.";};
   document.getElementById("search").onclick=search;
 
-  // Period selector is honest, not a placebo: we only have one set of sign forms (from the
-  // font), so it cannot re-rank yet. Selecting a period we lack forms for says so plainly.
+  // Period selector really switches the reference set (each period = its own font's forms).
   var periodSel=document.getElementById("period"), periodMsg=document.getElementById("periodMsg");
-  function updatePeriod(){
-    var p=periodSel.value;
-    if(p==="Neo-Assyrian"||p==="Any"){
-      periodMsg.style.color="#8b8272";
-      periodMsg.textContent="Showing standard (Neo-Assyrian-style) sign forms.";
-    }else{
-      periodMsg.style.color="#8a2c22";
-      periodMsg.textContent="⚠ No "+p+"-specific forms loaded yet — results still use the standard shapes. True period matching needs a per-period sign-form dataset.";
-    }
-  }
-  periodSel.onchange=updatePeriod; updatePeriod();
+  periodSel.onchange=function(){selectPeriod(periodSel.value);};
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
-    buildRefs();redraw();
-    statusEl.textContent="Ready — "+REF.length+" signs. Draw to search.";
+    buildMeta();redraw();
+    selectPeriod(periodSel.value);   // loads the default period (Neo-Assyrian / Assurbanipal)
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
 })();

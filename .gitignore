@@ -21,3 +21,6 @@ docs/_shot.png
 
 # NFS temp artifacts
 .nfs*
+
+# Downloaded period fonts (not redistributed; run tools/download_period_fonts.sh)
+tmp/
