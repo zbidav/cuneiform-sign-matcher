@@ -16,9 +16,26 @@ CACHE = os.path.join(HERE, "tools/ebl_meta.json")
 API = "https://www.ebl.lmu.de/api/signs/"
 
 
+SUB = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+
+
 def ebl_name(n):
     # Unicode sign name -> eBL sign-list name (e.g. "KA TIMES BAD" -> "KA×BAD").
     return n.replace(" TIMES ", "×").replace(" PLUS ", "+")
+
+
+def candidates(nm):
+    # eBL wraps COMPOUND signs in pipes (|KA×BAD|) and uses subscript digits (GAN₂).
+    # Yield the most likely forms first; the first that returns 200 wins.
+    base = ebl_name(nm)
+    if any(c in base for c in "×+&.· "):
+        yield "|%s|" % base
+        subbed = "|%s|" % base.translate(SUB)
+        if subbed != "|%s|" % base:
+            yield subbed
+        yield base
+    else:
+        yield base
 
 
 def load_signs():
@@ -30,16 +47,19 @@ def fetch_one(sign):
     cp, nm = sign["cp"], sign.get("n", "")
     if not nm:
         return cp, None
-    url = API + urllib.parse.quote(ebl_name(nm), safe="")
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "cuneiform-matcher/1.0"})
-        with urllib.request.urlopen(req, timeout=12) as r:
-            d = json.load(r)
-    except Exception:
-        return cp, None
-    lists = {l.get("name"): l.get("number") for l in d.get("lists", [])}
-    readings = [v.get("value") for v in d.get("values", []) if v.get("value")]
-    return cp, {"mzl": lists.get("MZL"), "abz": lists.get("ABZ"), "readings": readings}
+    for cand in candidates(nm):
+        url = API + urllib.parse.quote(cand, safe="")
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "cuneiform-matcher/1.0"})
+            with urllib.request.urlopen(req, timeout=12) as r:
+                d = json.load(r)
+        except Exception:
+            continue
+        lists = {l.get("name"): l.get("number") for l in d.get("lists", [])}
+        readings = [v.get("value") for v in d.get("values", []) if v.get("value")]
+        # `ebl` is the exact name string that resolved -> use it to build the sign-page link.
+        return cp, {"ebl": cand, "mzl": lists.get("MZL"), "abz": lists.get("ABZ"), "readings": readings}
+    return cp, None
 
 
 def main():
@@ -54,7 +74,7 @@ def main():
         with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
             for cp, m in ex.map(fetch_one, signs):
                 done += 1
-                if m and (m.get("mzl") or m.get("readings")):
+                if m:
                     meta[cp] = m
                 if done % 100 == 0:
                     print(f"  fetched {done}/{len(signs)} (hits so far: {len(meta)})", flush=True)
@@ -65,6 +85,8 @@ def main():
         m = meta.get(s["cp"])
         if not m:
             continue
+        if m.get("ebl"):
+            s["e"] = m["ebl"]
         if m.get("mzl"):
             s["m"] = m["mzl"]
         if m.get("abz"):
@@ -73,7 +95,7 @@ def main():
             s["r"] = m["readings"][:6]
     payload = "window.SIGNS=" + json.dumps(signs, separators=(",", ":")) + ";\n"
     open(DATA, "w").write(payload)
-    enriched = sum(1 for s in signs if "m" in s or "r" in s)
+    enriched = sum(1 for s in signs if "e" in s)
     print(f"merged: {enriched}/{len(signs)} signs now carry MZL/readings; bytes={len(payload)}")
 
 

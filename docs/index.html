@@ -26,7 +26,7 @@
   button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);padding:6px 11px;border-radius:8px}
   button:hover{border-color:var(--accent)}
   button.active{background:var(--accent);color:#fff;border-color:var(--accentd)}
-  .wedge{font-size:1.15rem;line-height:1;width:42px;padding:5px 0}
+  .wedge{font-size:.95rem;line-height:1;padding:6px 11px}
   .primary{background:var(--accent);color:#fff;border-color:var(--accentd);font-weight:600}
   .primary:hover{background:var(--accentd)}
   #pad{display:block;width:100%;max-width:440px;aspect-ratio:1/1;background:#fffef9;border:2px dashed var(--line);border-radius:10px;touch-action:none;cursor:crosshair;margin-top:8px}
@@ -64,11 +64,9 @@
       <button id="t-pen" title="Freehand (auto-straightened into segments)">✎ Freehand</button>
     </div>
     <div class="toolbar">
-      <span class="grouplabel">Stamp a basal wedge, then click on the canvas</span>
-      <button class="wedge" data-kind="vertical"    title="Vertical wedge">𒁹</button>
-      <button class="wedge" data-kind="horizontal"  title="Horizontal wedge">𒀸</button>
-      <button class="wedge" data-kind="diagonal"    title="Diagonal wedge">╲</button>
-      <button class="wedge" data-kind="winkelhaken" title="Winkelhaken (corner wedge)">𒌋</button>
+      <span class="grouplabel">Stamp a wedge — click to place, drag to set its angle</span>
+      <button class="wedge" data-kind="wedge"       title="Wedge — click to place, drag to angle it">𒁹 Wedge</button>
+      <button class="wedge" data-kind="winkelhaken" title="Winkelhaken — click to place, drag to angle it">𒌋 Winkelhaken</button>
     </div>
     <div class="toolbar">
       <button id="undo">↶ Undo</button>
@@ -153,7 +151,7 @@
     "Modern (Noto)":    {v:"SIGNS",    f:null,              font:"Noto Sans Cuneiform"}
   };
   function buildMeta(){
-    for(var i=0;i<window.SIGNS.length;i++){var s=window.SIGNS[i];META[s.cp]={m:s.m||"",z:s.z||"",r:s.r||null};}
+    for(var i=0;i<window.SIGNS.length;i++){var s=window.SIGNS[i];META[s.cp]={m:s.m||"",z:s.z||"",r:s.r||null,e:s.e||""};}
   }
   function buildRefsFrom(arr){
     var out=[];
@@ -161,7 +159,7 @@
       var s=arr[i], flipped=[];
       for(var a=0;a<s.g.length;a++){var pl=s.g[a],fp=[];for(var b=0;b<pl.length;b++)fp.push([pl[b][0],-pl[b][1]]);flipped.push(fp);}
       var mt=META[s.cp]||{};
-      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,polys:flipped,cloud:pointCloud(flipped)});
+      out.push({c:s.c,cp:s.cp,name:s.n||"",mzl:mt.m||"",abz:mt.z||"",readings:mt.r||null,ebl:mt.e||"",polys:flipped,cloud:pointCloud(flipped)});
     }
     return out;
   }
@@ -215,16 +213,20 @@
     return [pts[0],pts[pts.length-1]];
   }
 
-  // A stamped basal wedge as a real filled wedge shape (a closed triangle), so the four
-  // wedges are genuinely different shapes and compose into signs. pts closes the polygon.
-  function makeWedge(kind,cx,cy){
-    var W;
-    if(kind==="vertical")        W=[[-22,-60],[22,-60],[0,60]];    // tall, tip down
-    else if(kind==="horizontal") W=[[60,-22],[60,22],[-60,0]];     // wide, tip left
-    else if(kind==="diagonal")   W=[[-58,-30],[-30,-58],[54,54]];  // thin, tip lower-right
-    else /*winkelhaken*/         W=[[-38,-24],[38,-24],[0,40]];    // squat corner, tip down
-    var pts=[];for(var i=0;i<W.length;i++)pts.push([W[i][0]+cx,W[i][1]+cy]);
-    pts.push(pts[0]);   // close
+  // A wedge is a filled shape you rotate to any angle. The canonical shape points along +x
+  // (tip at +x, base centered on the anchor); it is rotated by `angle` and placed at (cx,cy).
+  //   wedge       = triangular head + short tapering tail (a classic cuneiform wedge)
+  //   winkelhaken = compact head-only corner wedge
+  var WEDGE_DEFAULT={wedge:Math.PI/2, winkelhaken:3*Math.PI/4};   // screen coords, +y down
+  function wedgeShape(kind,size){
+    var w=size*0.30;
+    if(kind==="winkelhaken"){var v=size*0.52;return [[size*0.6,0],[0,v],[0,-v]];}
+    return [[size,0],[size*0.45,w],[0,w*0.22],[0,-w*0.22],[size*0.45,-w]];
+  }
+  function makeWedgePoly(kind,cx,cy,angle,size){
+    var s=wedgeShape(kind,size),ca=Math.cos(angle),sa=Math.sin(angle),pts=[];
+    for(var i=0;i<s.length;i++){var x=s[i][0],y=s[i][1];pts.push([cx+x*ca-y*sa, cy+x*sa+y*ca]);}
+    pts.push(pts[0]);
     return {pts:pts,kind:kind,fill:true};
   }
 
@@ -250,17 +252,28 @@
     }
   }
 
+  var wedgeDrag=null;
+  function previewWedge(){
+    redraw();
+    var wp=makeWedgePoly(wedgeKind,wedgeDrag.cx,wedgeDrag.cy,wedgeDrag.angle,wedgeDrag.size);
+    ctx.fillStyle="#8a6d3b";ctx.beginPath();ctx.moveTo(wp.pts[0][0],wp.pts[0][1]);
+    for(var i=1;i<wp.pts.length;i++)ctx.lineTo(wp.pts[i][0],wp.pts[i][1]);
+    ctx.closePath();ctx.fill();
+  }
   canvas.addEventListener("pointerdown",function(e){
     e.preventDefault();var p=pos(e);
-    if(mode==="wedge"){strokes.push(makeWedge(wedgeKind,p[0],p[1]));redraw();search();return;}
+    if(mode==="wedge"){wedgeDrag={cx:p[0],cy:p[1],angle:WEDGE_DEFAULT[wedgeKind]||0,size:120};previewWedge();return;}
     raw={pts:[p],kind:null};
   });
   canvas.addEventListener("pointermove",function(e){
-    if(!raw)return;e.preventDefault();var p=pos(e);
+    var p=pos(e);
+    if(wedgeDrag){e.preventDefault();var dx=p[0]-wedgeDrag.cx,dy=p[1]-wedgeDrag.cy;if(Math.hypot(dx,dy)>8)wedgeDrag.angle=Math.atan2(dy,dx);previewWedge();return;}
+    if(!raw)return;e.preventDefault();
     if(mode==="line")raw.pts=[raw.pts[0],p]; else raw.pts.push(p);
     redraw();
   });
   window.addEventListener("pointerup",function(){
+    if(wedgeDrag){strokes.push(makeWedgePoly(wedgeKind,wedgeDrag.cx,wedgeDrag.cy,wedgeDrag.angle,wedgeDrag.size));wedgeDrag=null;redraw();search();return;}
     if(!raw)return;
     if(mode==="pen")raw.pts=rdp(raw.pts,4);   // straighten freehand into segments
     if(raw.pts.length>=2||strokes.length===0)strokes.push(raw);
@@ -283,7 +296,11 @@
       var ref=r.mzl?("MZL "+r.mzl):("U+"+r.cp);
       var a=document.createElement("a");a.className="card";
       a.title=nm+(rd?(" — "+r.readings.join(", ")):"")+(r.mzl?("  ·  MZL "+r.mzl):"")+(r.abz?("  ABZ "+r.abz):"");
-      a.href="https://www.ebl.lmu.de/tools/signs/"+encodeURIComponent(eblName(r.name||r.c));
+      // Prefer the exact eBL name that resolved during enrichment; otherwise fall back to
+      // the eBL search (avoids dead sign-page links for signs eBL names differently).
+      a.href = r.ebl
+        ? "https://www.ebl.lmu.de/tools/signs/"+encodeURIComponent(r.ebl)
+        : "https://www.ebl.lmu.de/tools/signs?query="+encodeURIComponent(eblName(r.name||r.c));
       a.target="_blank";a.rel="noopener";
       a.innerHTML=signSVG(r.polys)+
         '<span class="nm">'+esc(nm)+'</span>'+
