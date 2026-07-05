@@ -16,6 +16,12 @@ data files and the Python tools that produce them. Live: https://zbidav.github.i
 - Matching is geometric: the drawing and every reference sign are normalized to a unit box,
   densified into point clouds, and ranked by symmetric **chamfer distance**. One card per
   sign (best-matching form), ranked by similarity.
+- **Read from a photo**: **📷 Photo** uploads (or, on a phone, takes) a picture of a tablet.
+  It becomes a backdrop on the canvas — **Move/zoom** (drag to pan, mouse-wheel to zoom toward
+  the cursor, ＋/－/Fit), **enhance** it so the wedges pop (grayscale / high-contrast / invert /
+  a Sobel **edges** map), and **dim** it — then **trace** the sign on top with Line / Freehand /
+  wedges. The trace feeds the same matcher, so an unclear sign on the clay becomes a ranked
+  candidate list. (The photo stays in the browser; nothing is uploaded anywhere.)
 - **Periods**: the reference set switches per period, generated from period-specific cuneiform
   fonts — Neo-Assyrian (Assurbanipal), Old Babylonian (Santakku), Middle Babylonian
   (SantakkuM), Neo-Babylonian (Esagil), Hittite (Ullikummi), Modern (Noto). **"All periods"**
