@@ -43,6 +43,17 @@ data files and the Python tools that produce them. Live: https://zbidav.github.i
   the actual sign glyph (`lugal kur` → LUGAL, KUR); anything unrecognised stays as an *italic
   text pill* you can **click to search** for the matching sign. Backspace on the empty field
   deletes the last cell. Typed tokens feed combination auto-detect and gap auto-complete too.
+- **Reading disambiguation (homophony)**: a reading is often written by several signs
+  (`gur` → EDIN / GUD / GUR / ZI₃). A typed cell shows a **▾N caret** with the count and,
+  on click, a **chooser** listing every candidate sign (glyph + name + MZL + readings) to pick
+  from — or **keep it as text** (a reading, not a sign), or search all. So "I typed GUR but
+  meant a different sign" is one click to fix.
+- **Reading variations via the dictionary (polyphony)**: a sign has many reading values
+  (AB = ab / aš / eš₃ / …). For an all-signs line the gloss shows a **"could read:"** line —
+  it enumerates each sign's *basic* reading values (homophone-index penalty ≤ 2, to cut
+  coincidental noise), concatenates them across the line, and keeps only combinations that
+  spell a **dictionary word** (`ba.bu` → *ba-bu* = **Babu**), each linked to its eBL entry.
+  A conservative, honest suggestion — it only fires on confident basic-reading spellings.
 - **Blank/gap cells** are editable text inputs — type a transliteration/note into a gap.
 - **Drag to reorder** signs within/across lines, and **drag the ⠿ handle to reorder lines**.
 - **Copy** exports the transcription (sign names + notes), line by line.

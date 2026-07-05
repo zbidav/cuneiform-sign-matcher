@@ -59,6 +59,7 @@
   .sentgloss a{color:var(--accentd);text-decoration:none}
   .sentgloss a:hover{text-decoration:underline}
   .gloss-line{margin:3px 0}
+  .gloss-sub{margin:0 0 5px 16px;font-size:.78rem}
   .sentgloss .fillsug{color:var(--accentd);cursor:pointer;border-bottom:1px dashed var(--accentd);text-decoration:none}
   .sentgloss .fillsug:hover{background:var(--card)}
   .gw{color:var(--muted)}
@@ -85,6 +86,22 @@
   .line-type{flex:1 1 130px;min-width:130px;align-self:stretch;min-height:46px;border:1px dashed var(--line);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:.8rem;padding:0 8px}
   .line-type:focus{outline:none;border-color:var(--accent);background:var(--card)}
   .line-type::placeholder{color:var(--muted);font-style:italic}
+  .sent-slot.typed{border-style:dashed;border-color:var(--accent)}
+  .pick-caret{position:absolute;bottom:-6px;right:-4px;font-size:.55rem;line-height:1.3;color:var(--accentd);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:0 3px}
+  .chooser{position:absolute;z-index:60;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);padding:8px;font-size:.8rem}
+  .chooser .ch-head{margin:2px 4px 6px;color:var(--muted)}
+  .chooser .ch-list{display:flex;flex-direction:column;gap:3px;max-height:260px;overflow:auto}
+  .chooser .ch-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 6px;cursor:pointer;color:var(--ink)}
+  .chooser .ch-opt:hover{border-color:var(--accent)}
+  .chooser .ch-opt.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .chooser .ch-gly{flex:0 0 34px;height:30px}
+  .chooser .ch-gly svg{width:34px;height:30px;color:var(--ink)}
+  .chooser .ch-info{display:flex;flex-direction:column;line-height:1.25;overflow:hidden}
+  .chooser .ch-rd{color:var(--muted);font-size:.7rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chooser .ch-more{margin:5px 4px}
+  .chooser .ch-foot{display:flex;flex-direction:column;gap:3px;margin-top:7px;border-top:1px solid var(--line);padding-top:7px}
+  .chooser .ch-act{text-align:left;background:none;border:none;color:var(--accentd);cursor:pointer;padding:3px 4px;border-radius:6px;font-size:.78rem}
+  .chooser .ch-act:hover{background:var(--card)}
   .tiny{font-size:.75rem;padding:4px 9px}
   /* detail modal */
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
@@ -619,19 +636,26 @@
       cellsEl.ondragover=function(e){if(dragSrc){e.preventDefault();}};
       cellsEl.ondrop=function(e){if(dragSrc){e.preventDefault();e.stopPropagation();moveCell(dragSrc.li,dragSrc.ci,li,cells.length);dragSrc=null;}};
       cells.forEach(function(cell,ci){
-        var slot=document.createElement("div");slot.className="sent-slot"+(cell.b?" blank":(cell.q?" qtok":""));slot.draggable=!cell.b;
+        var typed=cell.q!==undefined&&!cell.b;
+        var slot=document.createElement("div");slot.className="sent-slot"+(cell.b?" blank":(typed?(cell.cp?" typed":" qtok"):""));slot.draggable=!cell.b;
         if(cell.b){
           var inp=document.createElement("input");inp.className="blank-in";inp.value=cell.t||"";inp.placeholder="…";inp.title="type a transliteration / note";
           inp.onclick=function(ev){ev.stopPropagation();};
           inp.oninput=function(){cell.t=inp.value;saveLines();};
           inp.onblur=function(){renderGloss();};
           slot.appendChild(inp);
-        }else if(cell.q){
-          slot.title="typed “"+cell.q+"” — click to search for a matching sign";
-          slot.innerHTML='<span class="sent-nm qy">'+esc(cell.q)+'</span>';
-          slot.onclick=function(ev){ev.stopPropagation();searchFor(cell.q);};
+        }else if(typed){
+          var cn=tokenCands(cell.q).length;
+          if(cell.cp){var s=SIGNMAP[cell.cp];
+            slot.title="typed “"+cell.q+"” → "+(s?s.name:cell.cp)+(cn>1?" · "+cn+" signs share this reading — click to change or keep as text":" · click to change or keep as text");
+            slot.innerHTML=(s?signSVG(s.polys):"")+'<span class="sent-nm">'+esc(cell.q)+'</span><span class="pick-caret">▾'+(cn>1?cn:"")+'</span>';
+          }else{
+            slot.title="typed “"+cell.q+"” — not a known sign; click to search or assign a sign";
+            slot.innerHTML='<span class="sent-nm qy">'+esc(cell.q)+'</span><span class="pick-caret">▾</span>';
+          }
+          slot.onclick=function(ev){ev.stopPropagation();openReadingChooser(li,ci,slot);};
         }else{
-          var s=SIGNMAP[cell.cp];slot.title=s?s.name:cell.cp;slot.innerHTML=(s?signSVG(s.polys):"")+'<span class="sent-nm">'+esc(s?s.name:("U+"+cell.cp))+'</span>';
+          var s2=SIGNMAP[cell.cp];slot.title=s2?s2.name:cell.cp;slot.innerHTML=(s2?signSVG(s2.polys):"")+'<span class="sent-nm">'+esc(s2?s2.name:("U+"+cell.cp))+'</span>';
           slot.onclick=function(ev){ev.stopPropagation();if(SIGNMAP[cell.cp])showDetail(SIGNMAP[cell.cp]);};
         }
         var x=document.createElement("button");x.className="sent-x";x.textContent="×";x.title="remove";
@@ -671,8 +695,11 @@
   function typeCommit(li,tok){
     tok=(tok||"").trim();if(!tok||lines[li].length>=MAXPERLINE)return;
     if(tok==="..."||tok==="…"){lines[li].push({b:1,t:""});return;}
-    var cp=TOK2CP[normTok(tok)];
-    lines[li].push(cp?{cp:cp}:{q:tok});
+    // Typed cell keeps the text (q) AND the currently chosen sign (cp; first candidate, or null
+    // if unknown). Ambiguous readings get a chooser on click so the scholar can switch sign or
+    // keep it as plain text. This is different from {cp}-only cells (drawn / added from a card).
+    var cands=tokenCands(tok);
+    lines[li].push({q:tok,cp:cands.length?cands[0]:null});
   }
   function onTyperKey(e,li,typer){
     if(e.key===" "||e.key==="Enter"){
@@ -694,6 +721,42 @@
     activeLine=li;saveLines();renderSentence();
   }
   function searchFor(q){var b=document.getElementById("txtsearch");if(!b)return;b.value=q;textSearch(q);try{b.scrollIntoView({block:"nearest"});}catch(_){}}
+  // ---- reading disambiguation: a typed token often fits several signs (homophony). Let the
+  //      scholar pick which sign, or keep the token as plain text (a reading, not a sign). ----
+  function closeChooser(){var c=document.getElementById("readChooser");if(c&&c.parentNode)c.parentNode.removeChild(c);document.removeEventListener("mousedown",chooserDismiss,true);}
+  function chooserDismiss(e){var c=document.getElementById("readChooser");if(c&&!c.contains(e.target))closeChooser();}
+  function openReadingChooser(li,ci,anchor){
+    closeChooser();
+    var cell=lines[li]&&lines[li][ci];if(!cell)return;
+    var tok=cell.q, cands=tokenCands(tok), shown=cands.slice(0,14);
+    var html='<div class="ch-head">typed <b>'+esc(tok)+'</b> — pick the sign you mean:</div><div class="ch-list">';
+    for(var i=0;i<shown.length;i++){var s=SIGNMAP[shown[i]];if(!s)continue;
+      var rd=(s.readings&&s.readings.length)?s.readings.slice(0,6).join(", ")+(s.readings.length>6?" …":""):"";
+      html+='<button class="ch-opt'+(shown[i]===cell.cp?" cur":"")+'" data-cp="'+shown[i]+'"><span class="ch-gly">'+signSVG(s.polys)+'</span><span class="ch-info"><b>'+esc(s.name)+'</b>'+(s.mzl?' <span class="gw">MZL '+esc(s.mzl)+'</span>':'')+(rd?'<span class="ch-rd">'+esc(rd)+'</span>':'')+'</span></button>';
+    }
+    html+='</div>';
+    if(cands.length>shown.length)html+='<div class="ch-more gw">+'+(cands.length-shown.length)+' more — use “search all”</div>';
+    if(!cands.length)html+='<div class="ch-more gw">no sign carries this reading/name</div>';
+    html+='<div class="ch-foot"><button class="ch-act" data-act="text">✎ keep as text (a reading, not a sign)</button>'+
+      '<button class="ch-act" data-act="search">🔍 search all signs</button>'+
+      (cell.cp?'<button class="ch-act" data-act="detail">🔗 sign details</button>':'')+'</div>';
+    var box=document.createElement("div");box.id="readChooser";box.className="chooser";box.innerHTML=html;
+    document.body.appendChild(box);
+    var r=anchor.getBoundingClientRect(), bw=Math.min(300,window.innerWidth-16);
+    box.style.width=bw+"px";
+    box.style.left=Math.max(window.pageXOffset+8,Math.min(r.left+window.pageXOffset,window.pageXOffset+window.innerWidth-bw-8))+"px";
+    box.style.top=(r.bottom+window.pageYOffset+4)+"px";
+    box.onclick=function(ev){
+      var opt=ev.target.closest?ev.target.closest(".ch-opt"):null;
+      if(opt){cell.cp=parseInt(opt.getAttribute("data-cp"),10);saveLines();closeChooser();renderSentence();return;}
+      var act=ev.target.closest?ev.target.closest(".ch-act"):null;if(!act)return;
+      var a=act.getAttribute("data-act");
+      if(a==="text"){cell.cp=null;saveLines();closeChooser();renderSentence();}
+      else if(a==="search"){closeChooser();searchFor(tok);}
+      else if(a==="detail"){var s=SIGNMAP[cell.cp];closeChooser();if(s)showDetail(s);}
+    };
+    setTimeout(function(){document.addEventListener("mousedown",chooserDismiss,true);},0);
+  }
   // ---- combination detection: match a line's signs to known writings (blanks = wildcards) ----
   var COMBOS=[];
   function normTok(t){return t.replace(/[₀-₉]/g,function(m){return String(m.charCodeAt(0)-0x2080);}).toLowerCase();}
@@ -717,9 +780,10 @@
   function matchLine(cells){
     var cc=[];for(var i=0;i<cells.length;i++){
       var cell=cells[i];
-      if(cell.b)cc.push(null);                          // blank = wildcard
-      else if(cell.q){var o={};o[normTok(cell.q)]=1;cc.push(o);}  // typed token matches its own text
-      else cc.push(signCands(cell.cp));
+      if(cell.b)cc.push(null);                                   // blank = wildcard
+      else if(cell.cp){var o=signCands(cell.cp);if(cell.q)o[normTok(cell.q)]=1;cc.push(o);}  // sign (drawn or resolved typed)
+      else if(cell.q!==undefined){var o2={};o2[normTok(cell.q)]=1;cc.push(o2);}  // unresolved typed token
+      else cc.push({});
     }
     var res=[];
     for(var m=0;m<COMBOS.length&&res.length<6;m++){
@@ -740,15 +804,65 @@
     for(i=0;i<window.SIGNS.length;i++){s=window.SIGNS[i];if(s.n){var nk=normTok(s.n);if(!TOK2CP[nk])TOK2CP[nk]=s.cp;}}
     for(i=0;i<window.SIGNS.length;i++){s=window.SIGNS[i];rr=s.r||[];for(k=0;k<rr.length;k++){var rk=normTok(rr[k]);if(!TOK2CP[rk])TOK2CP[rk]=s.cp;}}
   }
+  // token -> ALL signs that carry it (as name/eBL-name or as a reading), name-matches first.
+  // Homophony: one reading is often written by several signs (gur -> EDIN/GUD/GUR/ZI3), so a
+  // typed token needs the full candidate list to let the scholar disambiguate.
+  var TOKALL={};
+  function buildTokAll(){
+    TOKALL={};var i,s,rr,k,seen={};
+    function add(tok,cp){var t=normTok(tok);if(!t)return;if(!TOKALL[t])TOKALL[t]=[];var key=t+"|"+cp;if(seen[key])return;seen[key]=1;TOKALL[t].push(cp);}
+    for(i=0;i<window.SIGNS.length;i++){s=window.SIGNS[i];if(s.n)add(s.n,s.cp);if(s.e&&s.e!==s.n)add(s.e,s.cp);}   // names first
+    for(i=0;i<window.SIGNS.length;i++){s=window.SIGNS[i];rr=s.r||[];for(k=0;k<rr.length;k++)add(rr[k],s.cp);}      // then readings
+  }
+  function tokenCands(tok){return TOKALL[normTok(tok)]||[];}
   // A combination's Akkadian reading -> its eBL dictionary word id, so we can link the MEANING.
   // (The combination FORM like TIN.TIR is a writing, not a sign, so it has no sign page.)
   var WORD2ID={};
   // Normalize a word for matching: drop homonym numeral, parentheticals, and diacritics
   // (macrons/carons/dots), so the combination reading "Bābilu" matches the lemma "Babilu I".
   function normWord(x){return cleanLemma(String(x)).replace(/\s*\([^)]*\)/g,"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();}
+  function lettersOnly(x){return String(x).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z]/g,"");}
+  // WORDKEY: bare-letters lemma -> lemma id, for matching a syllabic reading concatenation
+  // (ba-bu -> "babu") against the dictionary. Keeps the shortest lemma per key.
+  var WORDKEY={};
   function buildWord2Id(){
-    WORD2ID={};
-    for(var k in WORDS){if(!WORDS.hasOwnProperty(k))continue;var nk=normWord(k);if(nk&&!WORD2ID[nk])WORD2ID[nk]=k;}
+    WORD2ID={};WORDKEY={};
+    for(var k in WORDS){if(!WORDS.hasOwnProperty(k))continue;
+      var nk=normWord(k);if(nk&&!WORD2ID[nk])WORD2ID[nk]=k;
+      var lk=lettersOnly(normWord(k));
+      if(lk.length>=3&&(!WORDKEY[lk]||k.length<WORDKEY[lk].length))WORDKEY[lk]=k;
+    }
+  }
+  // ---- reading variations (Roee): a sign is polyphonic; enumerate each sign's reading values,
+  //      concatenate across the line, and keep only combinations that spell a dictionary word.
+  function sylBase(r){return normTok(r).replace(/[0-9]+/g,"");}   // reading value w/o homophone index
+  function readIdxPen(r){var m=normTok(r).match(/(\d+)$/);return m?parseInt(m[1],10):0;}  // homophone index
+  var READ_MAXPEN=2;   // only combinations of BASIC readings (index<=this summed) — cuts coincidental noise
+  function readingWords(cells){
+    if(cells.length<2||cells.length>5)return [];
+    var opts=[];
+    for(var i=0;i<cells.length;i++){
+      var c=cells[i];if(c.b||c.cp==null)return [];               // needs every cell to be a resolved sign
+      var s=SIGNMAP[c.cp],rr=(s&&s.readings)||[];if(!rr.length)return [];
+      var seen={},arr=[];
+      for(var k=0;k<rr.length&&arr.length<24;k++){var pen=readIdxPen(rr[k]);if(pen>READ_MAXPEN)continue;var base=sylBase(rr[k]);if(!base||seen[base])continue;seen[base]=1;arr.push({base:base,disp:rr[k],pen:pen});}
+      if(!arr.length)return [];
+      opts.push(arr);
+    }
+    var total=1;for(var q=0;q<opts.length;q++)total*=opts[q].length;
+    if(total>80000)return [{capped:total}];                       // too many combos to enumerate safely
+    var hits=[],seenL={},idx=[];for(var z=0;z<opts.length;z++)idx.push(0);
+    for(var n=0;n<total;n++){
+      var joinKey="",disp=[],psum=0;
+      for(var j=0;j<opts.length;j++){var o=opts[j][idx[j]];joinKey+=o.base;disp.push(o.disp);psum+=o.pen;}
+      if(psum<=READ_MAXPEN){
+        var lem=WORDKEY[lettersOnly(joinKey)];
+        if(lem&&!seenL[lem]){seenL[lem]=1;hits.push({path:disp.join("-"),lemma:lem,mean:WORDS[lem]||"",pen:psum});}
+      }
+      for(var p=opts.length-1;p>=0;p--){if(++idx[p]<opts[p].length)break;idx[p]=0;}
+    }
+    hits.sort(function(a,b){return a.pen-b.pen||a.path.length-b.path.length;});  // basic readings first
+    return hits.slice(0,10);
   }
   function comboMeaningHtml(akk){   // "(akk)" — akk linked to the dictionary when it resolves
     var id=WORD2ID[normWord(akk)];
@@ -788,6 +902,12 @@
         }
       }
       html+='<div class="gloss-line"><span class="gw">'+(li+1)+'.</span> <b>'+reading+'</b>'+extra+'</div>';
+      var rw=readingWords(cells);   // reading variations that spell a dictionary word
+      if(rw.length&&!rw[0].capped){
+        html+='<div class="gloss-sub"><span class="gw">could read:</span> '+rw.map(function(x){
+          return '<a href="'+dictLink(x.lemma)+'" target="_blank" rel="noopener">'+esc(x.path)+'</a> <span class="gw">('+esc(cleanLemma(x.lemma))+(x.mean?" — "+esc(x.mean):"")+')</span>';
+        }).join(' <span class="gw">·</span> ')+'</div>';
+      }
     });
     glossEl.hidden=false;
     glossEl.innerHTML=html;
@@ -860,7 +980,7 @@
 
   function boot(){
     if(!window.SIGNS){statusEl.textContent="Failed to load sign data (js/signs-data.js).";return;}
-    buildMeta();buildSignList();buildCombos();buildTok2Cp();buildWord2Id();loadLines();renderSentence();initStamps();redraw();
+    buildMeta();buildSignList();buildCombos();buildTok2Cp();buildTokAll();buildWord2Id();loadLines();renderSentence();initStamps();redraw();
     selectPeriod(periodSel.value);   // default = All periods
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
