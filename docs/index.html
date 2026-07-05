@@ -80,6 +80,11 @@
   .sent-slot .sent-nm{display:block;font-size:.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sent-x{position:absolute;top:-7px;right:-7px;width:18px;height:18px;line-height:1;padding:0;font-size:12px;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--accentd)}
   .sent-x:hover{background:var(--accent);color:#fff}
+  .sent-slot.qtok{width:auto;min-width:44px;max-width:150px;min-height:46px;display:flex;align-items:center;justify-content:center;border-style:dashed;padding:4px 8px 2px}
+  .sent-slot.qtok .qy{font-size:.8rem;font-style:italic;color:var(--accentd);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .line-type{flex:1 1 130px;min-width:130px;align-self:stretch;min-height:46px;border:1px dashed var(--line);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:.8rem;padding:0 8px}
+  .line-type:focus{outline:none;border-color:var(--accent);background:var(--card)}
+  .line-type::placeholder{color:var(--muted);font-style:italic}
   .tiny{font-size:.75rem;padding:4px 9px}
   /* detail modal */
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
@@ -119,7 +124,7 @@
     <button id="addBlank" class="tiny" title="Add a blank / gap to the active line — you can type a note in it">␣ blank</button>
     <button id="sentCopy" class="tiny" title="Copy the transcription (sign names + notes), line by line">⧉ copy</button>
     <button id="sentClear" class="tiny" title="Clear all lines">clear</button>
-    <span class="note">click a line to select it · drag signs to reorder · type in a blank · × removes</span>
+    <span class="note">type a line directly (space = next sign, <b>...</b> = blank) · drag to reorder · click a typed word to search · × removes</span>
   </div>
   <div id="lines" class="lines"></div>
   <div id="sentGloss" class="sentgloss" hidden></div>
@@ -568,8 +573,9 @@
   }
 
   // ---- sentence workspace: up to 10 lines of signs (+ blank gaps); drag to reorder; persisted -
-  // Each cell is {cp:"..."} for a sign or {b:1} for a blank/gap. New signs go to the active line.
-  var lines=[[]], MAXLINES=10, MAXPERLINE=48, activeLine=0, dragSrc=null, dragSrcLine=null;
+  // Each cell is {cp:"..."} for a sign, {q:"..."} for a typed token (a reading/name not resolved
+  // to a sign — searchable text), or {b:1,t:""} for a blank/gap. New signs go to the active line.
+  var lines=[[]], MAXLINES=10, MAXPERLINE=48, activeLine=0, dragSrc=null, dragSrcLine=null, typerFocus=null;
   var linesEl=document.getElementById("lines"), glossEl=document.getElementById("sentGloss");
   function saveLines(){try{localStorage.setItem("cm_lines",JSON.stringify(lines));}catch(e){}}
   function loadLines(){
@@ -612,34 +618,82 @@
       var cellsEl=document.createElement("div");cellsEl.className="line-cells";
       cellsEl.ondragover=function(e){if(dragSrc){e.preventDefault();}};
       cellsEl.ondrop=function(e){if(dragSrc){e.preventDefault();e.stopPropagation();moveCell(dragSrc.li,dragSrc.ci,li,cells.length);dragSrc=null;}};
-      if(!cells.length){var ph=document.createElement("span");ph.className="sent-empty";ph.textContent="(empty line — select it, then Add to sentence)";cellsEl.appendChild(ph);}
       cells.forEach(function(cell,ci){
-        var slot=document.createElement("div");slot.className="sent-slot"+(cell.b?" blank":"");slot.draggable=!cell.b;
+        var slot=document.createElement("div");slot.className="sent-slot"+(cell.b?" blank":(cell.q?" qtok":""));slot.draggable=!cell.b;
         if(cell.b){
           var inp=document.createElement("input");inp.className="blank-in";inp.value=cell.t||"";inp.placeholder="…";inp.title="type a transliteration / note";
           inp.onclick=function(ev){ev.stopPropagation();};
           inp.oninput=function(){cell.t=inp.value;saveLines();};
           inp.onblur=function(){renderGloss();};
           slot.appendChild(inp);
-        }else{var s=SIGNMAP[cell.cp];slot.title=s?s.name:cell.cp;slot.innerHTML=(s?signSVG(s.polys):"")+'<span class="sent-nm">'+esc(s?s.name:("U+"+cell.cp))+'</span>';}
+        }else if(cell.q){
+          slot.title="typed “"+cell.q+"” — click to search for a matching sign";
+          slot.innerHTML='<span class="sent-nm qy">'+esc(cell.q)+'</span>';
+          slot.onclick=function(ev){ev.stopPropagation();searchFor(cell.q);};
+        }else{
+          var s=SIGNMAP[cell.cp];slot.title=s?s.name:cell.cp;slot.innerHTML=(s?signSVG(s.polys):"")+'<span class="sent-nm">'+esc(s?s.name:("U+"+cell.cp))+'</span>';
+          slot.onclick=function(ev){ev.stopPropagation();if(SIGNMAP[cell.cp])showDetail(SIGNMAP[cell.cp]);};
+        }
         var x=document.createElement("button");x.className="sent-x";x.textContent="×";x.title="remove";
         x.onclick=function(ev){ev.stopPropagation();removeCell(li,ci);};
         slot.appendChild(x);
-        if(!cell.b)slot.onclick=function(ev){ev.stopPropagation();if(SIGNMAP[cell.cp])showDetail(SIGNMAP[cell.cp]);};
         slot.ondragstart=function(e){dragSrc={li:li,ci:ci};e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain","x");}catch(_){}};
         slot.ondragover=function(e){e.preventDefault();e.stopPropagation();slot.classList.add("dragover");};
         slot.ondragleave=function(){slot.classList.remove("dragover");};
         slot.ondrop=function(e){e.preventDefault();e.stopPropagation();slot.classList.remove("dragover");if(dragSrc)moveCell(dragSrc.li,dragSrc.ci,li,ci);dragSrc=null;};
         cellsEl.appendChild(slot);
       });
+      // Inline typing: build a line by typing readings/names. Space starts the next cell;
+      // "..." makes a blank/gap. Known readings/names become signs; the rest stay as text pills.
+      var typer=document.createElement("input");
+      typer.className="line-type";typer.id="linetype-"+li;typer.autocomplete="off";typer.spellcheck=false;
+      typer.placeholder=cells.length?"type…":"type a line: e.g.  lugal kur …   (space = next, ... = blank)";
+      typer.title="Type sign readings or names. Space starts the next cell; type ... for a blank/gap. Known readings become signs, the rest stay as searchable text.";
+      typer.onclick=function(ev){ev.stopPropagation();};
+      typer.onfocus=function(){if(activeLine!==li){activeLine=li;var rows=linesEl.querySelectorAll(".sent-line");for(var q=0;q<rows.length;q++)rows[q].classList.toggle("active",q===li);}};
+      typer.onkeydown=function(e){onTyperKey(e,li,typer);};
+      typer.oninput=function(){onTyperInput(li,typer);};
+      cellsEl.appendChild(typer);
       row.appendChild(cellsEl);
       var del=document.createElement("button");del.className="tiny line-del";del.textContent="🗑";del.title="delete this line";
       del.onclick=function(ev){ev.stopPropagation();removeLine(li);};
       row.appendChild(del);
       linesEl.appendChild(row);
     });
+    if(typerFocus!=null){   // keep the caret in the line's typing field across re-renders
+      var tf=document.getElementById("linetype-"+typerFocus.li);
+      if(tf){tf.value=typerFocus.val||"";tf.focus();var L=tf.value.length;try{tf.setSelectionRange(L,L);}catch(_){}}
+      typerFocus=null;
+    }
     renderGloss();
   }
+  // ---- inline typing helpers: turn typed tokens into sign / text / blank cells ----
+  function typeCommit(li,tok){
+    tok=(tok||"").trim();if(!tok||lines[li].length>=MAXPERLINE)return;
+    if(tok==="..."||tok==="…"){lines[li].push({b:1,t:""});return;}
+    var cp=TOK2CP[normTok(tok)];
+    lines[li].push(cp?{cp:cp}:{q:tok});
+  }
+  function onTyperKey(e,li,typer){
+    if(e.key===" "||e.key==="Enter"){
+      e.preventDefault();var t=typer.value;typer.value="";typerFocus={li:li,val:""};
+      typeCommit(li,t);activeLine=li;saveLines();renderSentence();
+    }else if(e.key==="Backspace"&&typer.value===""&&lines[li].length){
+      e.preventDefault();typerFocus={li:li,val:""};removeCell(li,lines[li].length-1);
+    }
+  }
+  function onTyperInput(li,typer){   // flush complete tokens; "..."/"…" -> blank; spaces (e.g. paste) split
+    var v=typer.value.replace(/…/g,"...");
+    if(v.indexOf("...")<0&&v.indexOf(" ")<0){if(v!==typer.value)typer.value=v;return;}
+    v=v.replace(/\.\.\./g," … ");                    // treat a gap as its own token
+    var trailingSpace=/\s$/.test(v);
+    var parts=v.split(/\s+/).filter(function(x){return x.length;});
+    var residual=trailingSpace?"":(parts.length?parts.pop():"");
+    typerFocus={li:li,val:residual};
+    parts.forEach(function(p){typeCommit(li,p==="…"?"...":p);});
+    activeLine=li;saveLines();renderSentence();
+  }
+  function searchFor(q){var b=document.getElementById("txtsearch");if(!b)return;b.value=q;textSearch(q);try{b.scrollIntoView({block:"nearest"});}catch(_){}}
   // ---- combination detection: match a line's signs to known writings (blanks = wildcards) ----
   var COMBOS=[];
   function normTok(t){return t.replace(/[₀-₉]/g,function(m){return String(m.charCodeAt(0)-0x2080);}).toLowerCase();}
@@ -661,7 +715,12 @@
     return c;
   }
   function matchLine(cells){
-    var cc=[];for(var i=0;i<cells.length;i++)cc.push(cells[i].b?null:signCands(cells[i].cp));
+    var cc=[];for(var i=0;i<cells.length;i++){
+      var cell=cells[i];
+      if(cell.b)cc.push(null);                          // blank = wildcard
+      else if(cell.q){var o={};o[normTok(cell.q)]=1;cc.push(o);}  // typed token matches its own text
+      else cc.push(signCands(cell.cp));
+    }
     var res=[];
     for(var m=0;m<COMBOS.length&&res.length<6;m++){
       var C=COMBOS[m];if(C.toks.length!==cells.length)continue;
@@ -711,6 +770,7 @@
       if(!cells.length)return;
       var reading=cells.map(function(cell){
         if(cell.b)return '<span class="gw">'+(cell.t?esc(cell.t):"…")+'</span>';
+        if(cell.q)return '<i>'+esc(cell.q)+'</i>';
         var s=SIGNMAP[cell.cp];return esc(s?s.name:("U+"+cell.cp));
       }).join(".");
       var extra="";
@@ -791,7 +851,7 @@
     lines=[[]];activeLine=0;saveLines();renderSentence();
   };
   document.getElementById("sentCopy").onclick=function(){
-    var txt=lines.map(function(cells){return cells.map(function(cell){return cell.b?(cell.t||"…"):((SIGNMAP[cell.cp]&&SIGNMAP[cell.cp].name)||("U+"+cell.cp));}).join(".");}).filter(function(x){return x;}).join("\n");
+    var txt=lines.map(function(cells){return cells.map(function(cell){return cell.b?(cell.t||"…"):(cell.q?cell.q:((SIGNMAP[cell.cp]&&SIGNMAP[cell.cp].name)||("U+"+cell.cp)));}).join(".");}).filter(function(x){return x;}).join("\n");
     if(!txt)return;
     function ok(){var b=document.getElementById("sentCopy"),o=b.textContent;b.textContent="copied!";setTimeout(function(){b.textContent=o;},1200);}
     if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(ok,function(){window.prompt("Copy the transcription:",txt);});

@@ -38,6 +38,11 @@ data files and the Python tools that produce them. Live: https://zbidav.github.i
 **Sentence workspace (transcription surface)**
 - Up to **10 lines**; click a line to make it active (new signs land there). Per-line delete,
   per-cell remove.
+- **Type a line directly**: each line has an inline text field — type sign readings/names and
+  **space** starts the next cell, **`...`** inserts a blank/gap. Known readings/names resolve to
+  the actual sign glyph (`lugal kur` → LUGAL, KUR); anything unrecognised stays as an *italic
+  text pill* you can **click to search** for the matching sign. Backspace on the empty field
+  deletes the last cell. Typed tokens feed combination auto-detect and gap auto-complete too.
 - **Blank/gap cells** are editable text inputs — type a transliteration/note into a gap.
 - **Drag to reorder** signs within/across lines, and **drag the ⠿ handle to reorder lines**.
 - **Copy** exports the transcription (sign names + notes), line by line.
