@@ -82,8 +82,15 @@ aren't yet possible without corpus access.
 
 ## Deployment
 
-Hosted on **GitHub Pages via GitHub Actions** (`.github/workflows/deploy-pages.yml`;
-`docs/.nojekyll` bypasses Jekyll). Source = "GitHub Actions".
+Hosted on **GitHub Pages, Deploy-from-a-branch** — Settings → Pages → Source = "Deploy from a
+branch", branch `main`, folder **`/docs`** (`docs/.nojekyll` bypasses Jekyll). Changing the
+source/folder does **not** auto-rebuild — push a commit (empty is fine) to trigger a build.
+
+**Why not Actions:** the earlier `.github/workflows/deploy-pages.yml` (kept as
+`workflow_dispatch`-only) relied on `actions/deploy-pages@v4`, whose "Deploy to Pages" step wedged
+on GitHub's Pages backend (Node 20→24 rollout). Branch-deploy uses the separate legacy "pages build
+and deployment" path, which does not wedge. Folder must be `/docs`, not `/ (root)` — with root,
+Jekyll themes the top-level README instead of serving the app.
 
 **The Pages outage (resolved):** mid-session, Pages stopped publishing. Diagnosis via the
 public Actions API showed the Jekyll build then the `actions/deploy-pages` step failing
