@@ -13,6 +13,7 @@ model/checkpoints/
 # Local scratch / verification artifacts
 docs/_demo.html
 docs/_shot.png
+tools/dead_links.json
 *.swp
 .DS_Store
 

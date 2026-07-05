@@ -1,12 +1,14 @@
 name: Deploy docs to GitHub Pages
 
-# Modern Actions-based Pages deploy (replaces the auto branch-based "pages build and
-# deployment", whose deploy step was failing with "Getting Pages deployment status failed:
-# HttpError: Not Found"). Requires Settings -> Pages -> Source = "GitHub Actions".
+# Actions-based Pages deploy. DISABLED on push (manual dispatch only) because the
+# actions/deploy-pages@v4 step kept wedging on GitHub's Pages backend (Node 20->24 rollout
+# degradation, mid-2026) — three consecutive push-triggered runs failed at "Deploy to Pages".
+# The site is now served via **Deploy from a branch** (Settings -> Pages -> Source = main /docs);
+# docs/.nojekyll makes that path skip Jekyll and just upload the static files. Keeping this
+# workflow around (dispatch-only) so we can switch back to Actions deploy if GitHub stabilises,
+# without it generating failed-run noise on every push.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
