@@ -18,10 +18,15 @@ data files and the Python tools that produce them. Live: https://zbidav.github.i
   sign (best-matching form), ranked by similarity.
 - **Read from a photo**: **📷 Photo** uploads (or, on a phone, takes) a picture of a tablet.
   It becomes a backdrop on the canvas — **Move/zoom** (drag to pan, mouse-wheel to zoom toward
-  the cursor, ＋/－/Fit), **enhance** it so the wedges pop (grayscale / high-contrast / invert /
-  a Sobel **edges** map), and **dim** it — then **trace** the sign on top with Line / Freehand /
-  wedges. The trace feeds the same matcher, so an unclear sign on the clay becomes a ranked
-  candidate list. (The photo stays in the browser; nothing is uploaded anywhere.)
+  the cursor, ＋/－/Fit) — then **trace** the sign on top with Line / Freehand / wedges. The
+  trace feeds the same matcher, so an unclear sign on the clay becomes a ranked candidate list.
+  (The photo stays in the browser; nothing is uploaded anywhere.)
+- **Image adjustments** (continuous, not presets): **brightness**, **contrast**, **grayscale**,
+  and **dim** sliders, plus **invert** and a Sobel **edges** toggle (edges make wedge shadows
+  pop on clay), and a **⟲ reset**. Applied live via `ctx.filter`.
+- **Canvas size** control (small / medium / large / x-large) — the drawing canvas (and its
+  column) grow on screen for detailed photo work; existing strokes + the photo scale to match,
+  and the choice is remembered per browser.
 - **Periods**: the reference set switches per period, generated from period-specific cuneiform
   fonts — Neo-Assyrian (Assurbanipal), Old Babylonian (Santakku), Middle Babylonian
   (SantakkuM), Neo-Babylonian (Esagil), Hittite (Ullikummi), Modern (Noto). **"All periods"**
