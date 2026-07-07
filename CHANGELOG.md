@@ -64,6 +64,11 @@ data files and the Python tools that produce them. Live: https://zbidav.github.i
   on click, a **chooser** listing every candidate sign (glyph + name + MZL + readings) to pick
   from — or **keep it as text** (a reading, not a sign), or search all. So "I typed GUR but
   meant a different sign" is one click to fix.
+- **Reading-options grid (per line)**: a **"▸ reading options"** toggle under each line opens a
+  grid with one column per sign (glyph + name) listing **all** its eBL readings as clickable
+  chips. Pick a reading per sign and the transliteration updates live (AB → pick *aš*); a "name"
+  chip reverts to the logographic sign name. This is the visible, choose-as-you-go answer to
+  "which of the many readings did the scribe mean" (Roee's AB.AB → *aš.aš* case).
 - **Reading variations via the dictionary (polyphony)**: a sign has many reading values
   (AB = ab / aš / eš₃ / …). For an all-signs line the gloss shows a **"could read:"** line —
   it enumerates each sign's *basic* reading values (homophone-index penalty ≤ 2, to cut
