@@ -9,10 +9,15 @@ data files and the Python tools that produce them. Live: https://zbidav.github.i
 ## Feature summary (what the tool does now)
 
 **Drawing & shape matching**
-- Draw a sign three ways: **Line** (press–drag → one straight segment), **Freehand**
-  (auto-straightened into segments via Ramer–Douglas–Peucker), and **basal wedge stamps**
-  (Wedge = the real DIŠ glyph, Winkelhaken = the real U glyph) — click to place, **drag to
-  set the angle**. **Erase** tool removes whole strokes/wedges under the cursor.
+- Draw a sign several ways: **Line** (press–drag → one straight segment), **Freehand**
+  (auto-straightened into segments via Ramer–Douglas–Peucker), **Box** (press–drag → a
+  rectangle/frame), and **wedge stamps** — **Wedge** (real DIŠ glyph), **Short** (the same
+  wedge compressed along its length), **Winkelhaken** (real U glyph) — click to place, **drag
+  to set the angle**.
+- **Select** tool: click a drawn line/box/wedge to select it (dashed box + a round handle),
+  then **drag to move** it or **drag the handle to rotate** it about its centre.
+- **Erase**: drag to **rub out the part** of a line/box under the cursor (the polyline is
+  split); wedge stamps are removed whole. Scrub the whole stroke to clear it.
 - Matching is geometric: the drawing and every reference sign are normalized to a unit box,
   densified into point clouds, and ranked by symmetric **chamfer distance**. One card per
   sign (best-matching form), ranked by similarity.
