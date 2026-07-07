@@ -160,6 +160,7 @@
       <button id="t-line" class="active" title="Straight line: press and drag">╱ Line</button>
       <button id="t-pen" title="Freehand (auto-straightened into segments)">✎ Freehand</button>
       <button id="t-box" title="Box: press and drag to draw a rectangle / frame">▭ Box</button>
+      <button id="t-select" title="Select a drawn line/wedge, then drag to move it — or use the round handle above it to rotate">◈ Select</button>
       <button id="t-erase" title="Erase: drag to rub out the part of a line/box under the cursor (wedges are removed whole)">🩹 Erase</button>
     </div>
     <div class="toolbar">
@@ -387,7 +388,18 @@
   // ---- drawing surface ------------------------------------------------------
   // strokes: array of {pts:[[x,y],...], kind:null|'vertical'|'horizontal'|'diagonal'|'winkelhaken'}
   var strokes=[], raw=null, mode="line", wedgeKind=null;
+  var selIdx=-1, selDrag=null, selHandle=null;   // Select tool: move/rotate a drawn stroke
   function pos(e){var r=canvas.getBoundingClientRect();return [(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height];}
+  // ---- select / move / rotate helpers (operate on a stroke's pts or wedge contours) ----
+  function eachPt(st,fn){
+    if(st.contours){for(var c=0;c<st.contours.length;c++)for(var j=0;j<st.contours[c].length;j++)fn(st.contours[c][j]);}
+    else{var pts=st.pts||st;for(var j2=0;j2<pts.length;j2++)fn(pts[j2]);}
+  }
+  function strokeBBox(st){var mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;eachPt(st,function(q){if(q[0]<mnx)mnx=q[0];if(q[0]>mxx)mxx=q[0];if(q[1]<mny)mny=q[1];if(q[1]>mxy)mxy=q[1];});return {mnx:mnx,mny:mny,mxx:mxx,mxy:mxy,cx:(mnx+mxx)/2,cy:(mny+mxy)/2};}
+  function translateStroke(st,dx,dy){eachPt(st,function(q){q[0]+=dx;q[1]+=dy;});}
+  function rotateStroke(st,ang,cx,cy){var ca=Math.cos(ang),sa=Math.sin(ang);eachPt(st,function(q){var x=q[0]-cx,y=q[1]-cy;q[0]=cx+x*ca-y*sa;q[1]=cy+x*sa+y*ca;});}
+  function pointInPoly(p,poly){var x=p[0],y=p[1],inside=false;for(var i=0,j=poly.length-1;i<poly.length;j=i++){var xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/((yj-yi)||1e-9)+xi))inside=!inside;}return inside;}
+  function hitStroke(p){var R=14;for(var i=strokes.length-1;i>=0;i--){var st=strokes[i];if(st.contours){for(var c=0;c<st.contours.length;c++)if(pointInPoly(p,st.contours[c]))return i;}if(strokeDist(p,st)<R)return i;}return -1;}
 
   // ---- photo underlay: upload/capture a tablet photo, zoom/pan to a sign, enhance so the
   //      wedges pop, then TRACE the sign on top — the trace feeds the shape matcher. ----
@@ -456,7 +468,7 @@
     redraw();
   }
   function setPhotoMove(){mode="photo";wedgeKind=null;
-    ["t-line","t-pen","t-box","t-erase"].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.remove("active");});
+    ["t-line","t-pen","t-box","t-select","t-erase"].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.remove("active");});
     var wq=document.querySelectorAll(".wedge");for(var i=0;i<wq.length;i++)wq[i].classList.remove("active");
     var pm=document.getElementById("photoMove");if(pm)pm.classList.add("active");
     canvas.classList.add("panmode");
@@ -534,6 +546,19 @@
       ctx.stroke();
       ctx.fillStyle=THEME.accent;for(var d=0;d<pl.length;d++){ctx.beginPath();ctx.arc(pl[d][0],pl[d][1],3,0,7);ctx.fill();}
     }
+    selHandle=null;
+    if(mode==="select"&&selIdx>=0&&strokes[selIdx]){
+      var bb=strokeBBox(strokes[selIdx]);
+      ctx.save();ctx.strokeStyle=THEME.accent;ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+      ctx.strokeRect(bb.mnx-6,bb.mny-6,(bb.mxx-bb.mnx)+12,(bb.mxy-bb.mny)+12);
+      ctx.setLineDash([]);
+      var hx=bb.cx,hy=bb.mny-26;
+      ctx.beginPath();ctx.moveTo(bb.cx,bb.mny-6);ctx.lineTo(hx,hy);ctx.stroke();
+      ctx.beginPath();ctx.arc(hx,hy,8,0,7);ctx.fillStyle=THEME.accent;ctx.fill();
+      ctx.strokeStyle=THEME.paper;ctx.lineWidth=2;ctx.beginPath();ctx.arc(hx,hy,4.5,-2.4,1.6);ctx.stroke();  // ↻ hint
+      ctx.restore();
+      selHandle={x:hx,y:hy};
+    }
   }
 
   // ---- eraser: remove whole strokes/wedges under the cursor (vector, not pixels) ----
@@ -587,11 +612,24 @@
     if(mode==="erase"){erasing=true;eraseAt(p);return;}
     if(mode==="wedge"){wedgeDrag={cx:p[0],cy:p[1],angle:WEDGE_DEFAULT[wedgeKind]||0,size:120};previewWedge();return;}
     if(mode==="box"){raw={pts:[[p[0],p[1]]],kind:"box",o:[p[0],p[1]]};return;}
+    if(mode==="select"){
+      if(selIdx>=0&&strokes[selIdx]&&selHandle&&Math.hypot(p[0]-selHandle.x,p[1]-selHandle.y)<13){
+        var bb=strokeBBox(strokes[selIdx]);selDrag={type:"rotate",cx:bb.cx,cy:bb.cy,a0:Math.atan2(p[1]-bb.cy,p[0]-bb.cx)};return;
+      }
+      var hit=hitStroke(p);
+      if(hit>=0){selIdx=hit;selDrag={type:"move",lx:p[0],ly:p[1]};}else{selIdx=-1;selDrag=null;}
+      redraw();return;
+    }
     raw={pts:[p],kind:null};
   });
   canvas.addEventListener("pointermove",function(e){
     var p=pos(e);
     if(panning){e.preventDefault();photo.x+=p[0]-panning.x;photo.y+=p[1]-panning.y;panning={x:p[0],y:p[1]};redraw();return;}
+    if(selDrag&&strokes[selIdx]){e.preventDefault();
+      if(selDrag.type==="move"){translateStroke(strokes[selIdx],p[0]-selDrag.lx,p[1]-selDrag.ly);selDrag.lx=p[0];selDrag.ly=p[1];}
+      else{var a=Math.atan2(p[1]-selDrag.cy,p[0]-selDrag.cx);rotateStroke(strokes[selIdx],a-selDrag.a0,selDrag.cx,selDrag.cy);selDrag.a0=a;}
+      redraw();return;
+    }
     if(erasing){e.preventDefault();eraseAt(p);return;}
     if(wedgeDrag){e.preventDefault();var dx=p[0]-wedgeDrag.cx,dy=p[1]-wedgeDrag.cy;if(Math.hypot(dx,dy)>8)wedgeDrag.angle=Math.atan2(dy,dx);previewWedge();return;}
     if(!raw)return;e.preventDefault();
@@ -602,6 +640,7 @@
   canvas.addEventListener("wheel",function(e){if(!photo)return;e.preventDefault();var p=pos(e);zoomPhoto(e.deltaY<0?1.12:1/1.12,p[0],p[1]);},{passive:false});
   window.addEventListener("pointerup",function(){
     if(panning){panning=null;return;}
+    if(selDrag){selDrag=null;if(txt)txt.value="";search();return;}
     if(erasing){erasing=false;if(txt)txt.value="";search();return;}
     if(wedgeDrag){strokes.push(makeWedgePoly(wedgeKind,wedgeDrag.cx,wedgeDrag.cy,wedgeDrag.angle,wedgeDrag.size));wedgeDrag=null;if(txt)txt.value="";redraw();search();return;}
     if(!raw)return;
@@ -1064,18 +1103,21 @@
     document.getElementById("t-line").classList.toggle("active",m==="line");
     document.getElementById("t-pen").classList.toggle("active",m==="pen");
     document.getElementById("t-box").classList.toggle("active",m==="box");
+    document.getElementById("t-select").classList.toggle("active",m==="select");
     document.getElementById("t-erase").classList.toggle("active",m==="erase");
     var pm=document.getElementById("photoMove");if(pm)pm.classList.remove("active");
     canvas.classList.remove("panmode");
-    var ws=document.querySelectorAll(".wedge");for(var i=0;i<ws.length;i++)ws[i].classList.remove("active");}
+    var ws=document.querySelectorAll(".wedge");for(var i=0;i<ws.length;i++)ws[i].classList.remove("active");
+    if(m!=="select"){selDrag=null;}redraw();}
   document.getElementById("t-line").onclick=function(){setDraw("line");};
   document.getElementById("t-pen").onclick=function(){setDraw("pen");};
   document.getElementById("t-box").onclick=function(){setDraw("box");};
+  document.getElementById("t-select").onclick=function(){setDraw("select");};
   document.getElementById("t-erase").onclick=function(){setDraw("erase");};
   var ws=document.querySelectorAll(".wedge");
   for(var w=0;w<ws.length;w++)(function(btn){btn.onclick=function(){
     mode="wedge";wedgeKind=btn.getAttribute("data-kind");
-    ["t-line","t-pen","t-box","t-erase"].forEach(function(id){document.getElementById(id).classList.remove("active");});
+    ["t-line","t-pen","t-box","t-select","t-erase"].forEach(function(id){document.getElementById(id).classList.remove("active");});
     var pm=document.getElementById("photoMove");if(pm)pm.classList.remove("active");canvas.classList.remove("panmode");
     for(var i=0;i<ws.length;i++)ws[i].classList.remove("active");btn.classList.add("active");
   };})(ws[w]);
@@ -1099,10 +1141,10 @@
   padSel.onchange=function(){setPadSize(parseInt(padSel.value,10)||440);};
   (function(){var v=440;try{var s=localStorage.getItem("cm_padsize");if(s)v=parseInt(s,10)||440;}catch(e){}
     padSel.value=String([360,440,580,760].indexOf(v)>=0?v:440);setPadSize(v);})();
-  document.getElementById("undo").onclick=function(){strokes.pop();redraw();search();};
+  document.getElementById("undo").onclick=function(){strokes.pop();selIdx=-1;selDrag=null;redraw();search();};
   document.getElementById("clear").onclick=function(){
     if(strokes.length&&!window.confirm("Clear the canvas?"))return;
-    strokes=[];if(txt)txt.value="";redraw();resultsEl.innerHTML="";statusEl.textContent="Draw a sign, or search by name.";
+    strokes=[];selIdx=-1;selDrag=null;if(txt)txt.value="";redraw();resultsEl.innerHTML="";statusEl.textContent="Draw a sign, or search by name.";
   };
   document.getElementById("search").onclick=search;
 
