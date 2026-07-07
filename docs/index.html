@@ -160,7 +160,7 @@
       <button id="t-line" class="active" title="Straight line: press and drag">╱ Line</button>
       <button id="t-pen" title="Freehand (auto-straightened into segments)">✎ Freehand</button>
       <button id="t-box" title="Box: press and drag to draw a rectangle / frame">▭ Box</button>
-      <button id="t-erase" title="Erase: click or drag over a stroke/wedge to remove it">🩹 Erase</button>
+      <button id="t-erase" title="Erase: drag to rub out the part of a line/box under the cursor (wedges are removed whole)">🩹 Erase</button>
     </div>
     <div class="toolbar">
       <span class="grouplabel">Stamp a wedge — click to place, drag to set its angle</span>
@@ -456,7 +456,7 @@
     redraw();
   }
   function setPhotoMove(){mode="photo";wedgeKind=null;
-    ["t-line","t-pen","t-erase"].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.remove("active");});
+    ["t-line","t-pen","t-box","t-erase"].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.remove("active");});
     var wq=document.querySelectorAll(".wedge");for(var i=0;i<wq.length;i++)wq[i].classList.remove("active");
     var pm=document.getElementById("photoMove");if(pm)pm.classList.add("active");
     canvas.classList.add("panmode");
@@ -549,10 +549,30 @@
       for(i=0;i<pl.length-1;i++){var dd=segDist(p[0],p[1],pl[i][0],pl[i][1],pl[i+1][0],pl[i+1][1]);if(dd<m)m=dd;}}
     return m;
   }
+  function densifyPts(pts,step){   // resample a polyline so a straight 2-point line can be part-erased
+    if(pts.length<2)return pts.slice();
+    var out=[pts[0].slice()];
+    for(var i=0;i<pts.length-1;i++){var a=pts[i],b=pts[i+1],dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy),n=Math.max(1,Math.ceil(L/step));
+      for(var k=1;k<=n;k++)out.push([a[0]+dx*k/n,a[1]+dy*k/n]);}
+    return out;
+  }
+  // Eraser: rub out the PART of a line/box under the cursor (splits the polyline); wedge stamps
+  // are removed whole (a filled glyph can't be half-rubbed). Scrub the whole stroke to clear it.
   function eraseAt(p){
-    var R=16,changed=false;
-    for(var i=strokes.length-1;i>=0;i--){if(strokeDist(p,strokes[i])<R){strokes.splice(i,1);changed=true;}}
-    if(changed)redraw();
+    var R=16,changed=false,out=[];
+    for(var i=0;i<strokes.length;i++){var st=strokes[i];
+      if(strokeDist(p,st)>=R){out.push(st);continue;}
+      if(st.contours){changed=true;continue;}                 // wedge/filled glyph → whole removal
+      var dp=densifyPts(st.pts||st,4),run=[],runs=[];
+      for(var j=0;j<dp.length;j++){
+        if(Math.hypot(p[0]-dp[j][0],p[1]-dp[j][1])<R){if(run.length>=2)runs.push(run);run=[];}
+        else run.push(dp[j]);
+      }
+      if(run.length>=2)runs.push(run);
+      changed=true;
+      for(var r=0;r<runs.length;r++)out.push({pts:rdp(runs[r],2),kind:st.kind});
+    }
+    if(changed){strokes=out;redraw();}
   }
 
   var wedgeDrag=null;
