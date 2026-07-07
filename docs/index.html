@@ -66,6 +66,16 @@
   .sentgloss a:hover{text-decoration:underline}
   .gloss-line{margin:3px 0}
   .gloss-sub{margin:0 0 5px 16px;font-size:.78rem}
+  .sentgloss .rdtoggle{color:var(--accentd);text-decoration:none;border-bottom:1px dashed var(--accentd)}
+  .rdgrid{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 8px 16px}
+  .rdcol{flex:0 0 auto;min-width:66px;max-width:120px;border:1px solid var(--line);border-radius:8px;padding:5px;background:var(--card)}
+  .rdhead{display:flex;flex-direction:column;align-items:center;gap:2px;border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:4px}
+  .rdhead svg{width:30px;height:26px;color:var(--ink)}
+  .rdhead span{font-size:.66rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .rdchips{display:flex;flex-direction:column;gap:2px;max-height:168px;overflow:auto}
+  .rdchip{display:block;text-align:center;font-size:.72rem;padding:2px 5px;border-radius:6px;border:1px solid transparent;color:var(--ink);text-decoration:none;white-space:nowrap}
+  .rdchip:hover{border-color:var(--accent)}
+  .rdchip.cur{background:var(--accent);color:#fff}
   .sentgloss .fillsug{color:var(--accentd);cursor:pointer;border-bottom:1px dashed var(--accentd);text-decoration:none}
   .sentgloss .fillsug:hover{background:var(--card)}
   .gw{color:var(--muted)}
@@ -777,7 +787,7 @@
   // ---- sentence workspace: up to 10 lines of signs (+ blank gaps); drag to reorder; persisted -
   // Each cell is {cp:"..."} for a sign, {q:"..."} for a typed token (a reading/name not resolved
   // to a sign — searchable text), or {b:1,t:""} for a blank/gap. New signs go to the active line.
-  var lines=[[]], MAXLINES=10, MAXPERLINE=48, activeLine=0, dragSrc=null, dragSrcLine=null, typerFocus=null;
+  var lines=[[]], MAXLINES=10, MAXPERLINE=48, activeLine=0, dragSrc=null, dragSrcLine=null, typerFocus=null, readingGridLine=-1;
   var linesEl=document.getElementById("lines"), glossEl=document.getElementById("sentGloss");
   function saveLines(){try{localStorage.setItem("cm_lines",JSON.stringify(lines));}catch(e){}}
   function loadLines(){
@@ -1093,6 +1103,24 @@
           return '<a href="'+dictLink(x.lemma)+'" target="_blank" rel="noopener">'+esc(x.path)+'</a> <span class="gw">('+esc(cleanLemma(x.lemma))+(x.mean?" — "+esc(x.mean):"")+')</span>';
         }).join(' <span class="gw">·</span> ')+'</div>';
       }
+      // per-sign reading options: pick a reading for each sign to build the transliteration
+      if(cells.some(function(c){return !c.b&&c.cp!=null;})){
+        var open=readingGridLine===li;
+        html+='<div class="gloss-sub"><a href="#" class="rdtoggle" data-li="'+li+'">'+(open?"▾ hide reading options":"▸ reading options — pick a reading per sign")+'</a></div>';
+        if(open){
+          html+='<div class="rdgrid">';
+          cells.forEach(function(cell,ci){
+            if(cell.b||cell.cp==null)return;
+            var s=SIGNMAP[cell.cp];if(!s)return;var rr=s.readings||[],cur=cell.q!==undefined?normTok(cell.q):null;
+            html+='<div class="rdcol"><div class="rdhead">'+signSVG(s.polys)+'<span>'+esc(s.name)+'</span></div><div class="rdchips">';
+            html+='<a href="#" class="rdchip'+(cell.q===undefined?" cur":"")+'" data-li="'+li+'" data-ci="'+ci+'" data-r="" title="use the logographic sign name">'+esc(s.name)+'</a>';
+            for(var k=0;k<rr.length;k++)html+='<a href="#" class="rdchip'+(cur===normTok(rr[k])?" cur":"")+'" data-li="'+li+'" data-ci="'+ci+'" data-r="'+esc(rr[k])+'">'+esc(rr[k])+'</a>';
+            if(!rr.length)html+='<span class="gw">(no readings)</span>';
+            html+='</div></div>';
+          });
+          html+='</div>';
+        }
+      }
     });
     glossEl.hidden=false;
     glossEl.innerHTML=html;
@@ -1174,8 +1202,14 @@
   modal.onclick=function(e){if(e.target===modal)closeModal();};
   document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
   glossEl.addEventListener("click",function(e){
-    var a=e.target.closest?e.target.closest(".fillsug"):null;
-    if(a){e.preventDefault();applyCombo(parseInt(a.getAttribute("data-li"),10),(a.getAttribute("data-fill")||"").split(","));}
+    var cl=e.target.closest?e.target.closest.bind(e.target):null;if(!cl)return;
+    var a=cl(".fillsug");
+    if(a){e.preventDefault();applyCombo(parseInt(a.getAttribute("data-li"),10),(a.getAttribute("data-fill")||"").split(","));return;}
+    var tg=cl(".rdtoggle");
+    if(tg){e.preventDefault();var li=parseInt(tg.getAttribute("data-li"),10);readingGridLine=(readingGridLine===li?-1:li);renderGloss();return;}
+    var ch=cl(".rdchip");
+    if(ch){e.preventDefault();var l2=parseInt(ch.getAttribute("data-li"),10),ci=parseInt(ch.getAttribute("data-ci"),10),r=ch.getAttribute("data-r");
+      var cell=lines[l2]&&lines[l2][ci];if(cell){if(r)cell.q=r;else delete cell.q;saveLines();renderSentence();}return;}
   });
   document.getElementById("addLine").onclick=addLine;
   document.getElementById("addBlank").onclick=addBlank;
